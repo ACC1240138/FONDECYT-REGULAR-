@@ -18,17 +18,21 @@ data08 <- enpg08 %>%
          religion = q277, nedu = q279, ecivil = q281, 
          p_originario = q282, ingreso = q284,oh1 = q12, oh2 = q15, oh3 = q16,
          tab1 = q5,tab2 = q8, tab3 = q9, tab4 = q10, mar1 = q33, mar2 = q36,
-         coc1 = q79, coc2 = q82, q133a, q133b, q133c, q133d, q133e, q133f, q133g,
-         q133h, q133i, q133j, q134, q135, q136, q137, q138, q139, q140, q141, q142, q143,
+         coc1 = q79, coc2 = q82, t1 = q133a, t2 = q133b, t3 = q133c, t4= q133d, 
+         t5 = q133e, t6 = q133f, t7 = q133g, t8 = q133h, t9 = q133i, t10 = q133j, 
+         t1_m = q134, t2_m = q135, t3_m = q136, t4_m = q137, t5_m = q138, t6_m = q139, 
+         t7_m = q140, t8_m = q141, t9_m = q142, t10_m = q143,
          audit1 = q18, audit2 = q19, audit3 = q20) %>% 
   mutate(id = factor(id),
          mar1 = factor(mar1, levels = c(1,2), labels = c("Si","No")),
-         mar2 = factor(mar2, levels = c (1,2,3), labels = c("30 dias",">30",">1 año")),
+         mar2 = factor(mar2, levels = c (1,2,3), labels = c("<30",">30",">1 año")),
+         coc1 = factor(coc1, levels = c(1,2), labels = c("Si","No")),
+         coc2 = factor(coc2, levels = c (1,2,3), labels = c("<30",">30",">1 año")),
          tab1 = factor(tab1, levels = c(1,2), labels = c("Si","No")),
-         tab2 = factor(tab2, levels = c (1,2,3), labels = c("30 dias",">30",">1 año")),
+         tab2 = factor(tab2, levels = c (1,2,3), labels = c("<30",">30",">1 año")),
     sexo = factor(sexo, levels = c(1,2), labels = c("Hombre","Mujer")),
          oh1 = factor(oh1, levels = c(1,2), labels = c("Si","No")),
-         oh2 = factor(oh2, levels = c (1,2,3), labels = c("30 dias",">30",">1 año")),
+         oh2 = factor(oh2, levels = c (1,2,3), labels = c("<30",">30",">1 año")),
          audit1 = factor(audit1, levels = c (0:4), labels = c("Nunca","1 vez al mes o menos"," 2 a 4 veces al mes",
                                                               "2 a 3 veces a la semana","4 o mas veces a la semana")),
          audit2 = factor(audit2, levels = c (0:4), labels = c("0-2","3-4","5-6",
@@ -54,8 +58,12 @@ data08 <- enpg08 %>%
                                  nedu == 6 | nedu == 8 ~ "superior completa",
                                  TRUE~NA)),
          ingreso = na_if(ingreso, 9),
-         ingreso = na_if(ingreso, 0))
-         
+         ingreso = na_if(ingreso, 0)) %>% 
+  rowwise() %>%
+  mutate(tranq_vida = if_else(any(c_across(t1:t10) == 1), 1, 0),
+         tranq_mes = if_else(any(c_across(t1_m:t10_m) %in% c(1, 2)), 1, 0)) %>%
+  ungroup() %>% 
+  select(-matches("^t[1-9]$|^t10$"), -matches("^t[1-9]_m$|^t10_m$"))
 
 #############
 # ENPG 2010 #
@@ -63,12 +71,20 @@ data08 <- enpg08 %>%
 
 enpg10 <- read_rds("https://github.com/ACC1240138/FONDECYT-REGULAR-/raw/main/rawdata/enpg2010.RDS")
 data10 <- enpg10 %>% mutate(year = 2010) %>% 
-  select(id = folio, year,region = pregion,
+  select(id = folio, year,region = pregion, comuna = pcodcom,tab1 = p005, tab2 = p008,
+         tab3 = p009, tab4 = p010, mar1 = p033, mar2 = p036, coc1 = p077, coc2 = p080, 
+         t1 = p169, t1_m = p170, t2 = p171, t2_m = p172, t3 = p173, t3_m = p174, 
+         t4 = p175, t4_m = p176, t5 = p177, t5_m = p178, t6 = p179, t6_m = p180, 
+         t7 = p181, t7_m = p182, t8 = p183, t8_m = p184, t9 = p185, t9_m = p186, 
          exp = factor_ajustado_com, sexo = psexoent,edad = pedadent, nedu = p288a, 
          religion = p285,ecivil = p282, p_originario = p283, ingreso = p291,
-         oh1 = p013, oh2 = p016, audit1 = p019, audit2 = p020, audit3 = p021) %>% 
+         oh1 = p013, oh2 = p016, oh3 = p017, audit1 = p019, audit2 = p020, audit3 = p021) %>% 
   mutate(id = factor(id),
     sexo = factor(sexo, levels = c(1,2), labels = c("Hombre","Mujer")),
+    mar1 = factor(mar1, levels = c(1,2), labels = c("Si","No")),
+    mar2 = factor(mar2, levels = c (1,2,3), labels = c("30 dias",">30",">1 año")),
+    tab1 = factor(tab1, levels = c(1,2), labels = c("Si","No")),
+    tab2 = factor(tab2, levels = c (1,2,3), labels = c("30 dias",">30",">1 año")),
          oh1 = factor(oh1, levels = c(1,2), labels = c("Si","No")),
          oh2 = factor(oh2, levels = c (1,2,3), labels = c("30 dias",">30",">1 año")),
          audit1 = factor(audit1, levels = c (0:4), labels = c("Nunca","1 vez al mes o menos"," 2 a 4 veces al mes",
@@ -96,7 +112,16 @@ data10 <- enpg10 %>% mutate(year = 2010) %>%
                                  nedu == 9 | nedu == 11 | nedu == 13 ~ "superior incompleta",
                                  nedu == 10 | nedu == 12 | nedu == 14 | nedu == 15 ~ "superior completa",
                                  TRUE~NA)),
-         ingreso = na_if(ingreso, 9))
+         ingreso = na_if(ingreso, 9)) 
+
+data10 <- data10%>% 
+  rowwise() %>%
+  mutate(
+    tranq_vida = if_else(any(c_across(t1:t9) == 1), 1, 0),
+    tranq_mes = if_else(any(c_across(t1_m:t9_m) %in% c(1, 2)), 1, 0)
+  ) %>%
+  ungroup() %>%
+  select(-t1:-t9, -t1_m:-t9_m)
 
 
 #############
