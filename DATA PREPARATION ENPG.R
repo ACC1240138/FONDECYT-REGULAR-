@@ -14,10 +14,18 @@ library(readr)
 enpg08 <- read_rds("https://github.com/ACC1240138/FONDECYT-REGULAR-/raw/main/rawdata/enpg2008.RDS")
 enpg08 <- enpg08 %>% mutate(year = 2008)
 data08 <- enpg08 %>% 
-  select(id, year, region,exp, sexo, edad,  
+  select(id, year, area, region,comuna, n_per, exp, sexo, edad,  
          religion = q277, nedu = q279, ecivil = q281, 
-         p_originario = q282, ingreso = q284,oh1 = q12, oh2 = q15, audit1 = q18, audit2 = q19, audit3 = q20) %>% 
+         p_originario = q282, ingreso = q284,oh1 = q12, oh2 = q15, oh3 = q16,
+         tab1 = q5,tab2 = q8, tab3 = q9, tab4 = q10, mar1 = q33, mar2 = q36,
+         coc1 = q79, coc2 = q82, q133a, q133b, q133c, q133d, q133e, q133f, q133g,
+         q133h, q133i, q133j, q134, q135, q136, q137, q138, q139, q140, q141, q142, q143,
+         audit1 = q18, audit2 = q19, audit3 = q20) %>% 
   mutate(id = factor(id),
+         mar1 = factor(mar1, levels = c(1,2), labels = c("Si","No")),
+         mar2 = factor(mar2, levels = c (1,2,3), labels = c("30 dias",">30",">1 año")),
+         tab1 = factor(tab1, levels = c(1,2), labels = c("Si","No")),
+         tab2 = factor(tab2, levels = c (1,2,3), labels = c("30 dias",">30",">1 año")),
     sexo = factor(sexo, levels = c(1,2), labels = c("Hombre","Mujer")),
          oh1 = factor(oh1, levels = c(1,2), labels = c("Si","No")),
          oh2 = factor(oh2, levels = c (1,2,3), labels = c("30 dias",">30",">1 año")),
@@ -363,3 +371,10 @@ data22 <- enpg22 %>%
 enpg_full <- bind_rows(data08, data10, data12,data14,data16,data18,data20,data22)
 
 write_rds(enpg_full, "ENPG_FULL.RDS", compress = "gz")
+
+
+########################
+# ESTIMATE ALCOHOL USE #
+########################
+
+enpg_full <- 
