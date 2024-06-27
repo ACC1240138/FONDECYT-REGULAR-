@@ -519,5 +519,32 @@ write_rds(enpg_full, "ENPG_FULL.RDS", compress = "gz")
 rm(list = ls())
 gc()
 
+table(data$audit2)
 enpg_full <- readRDS("enpg_full.RDS")
+data <- enpg_full %>% 
+  filter(edad >=15) %>% 
+  mutate(oh3 = case_when(oh1 == "No"| oh2 == ">30" | oh2 == ">1 año"~ 0,
+                         TRUE ~oh3),
+    prom_tragos = case_when(oh1 == "No" | oh2 == ">30" | oh2 == ">1 año"  ~ 0,
+                                audit2 == "0-2"~ 1,
+                                 audit2 == "3-4"~ 3.5,
+                                 audit2 == "5-6"~ 5.5,
+                                 audit2 == "7-8"~ 7.5,
+                                 audit2 == "9 o mas" ~ 9),
+         dias_binge = case_when(audit3 == "Nunca" | oh1 == "No"| oh2 == ">30" | oh2 == ">1 año" ~ 0,
+                                audit3 == "menos de 1 vez al mes" ~ 0.5,
+                                audit3 == "mensualmente" ~ 1,
+                                audit3 == "semanalmente" ~ 4,
+                                audit3 == "todos o casi todos los dias" ~ 20),
+         diasalchab = oh3-dias_binge,
+         diasalchab = ifelse(diasalchab < 0, 0, diasalchab),
+         volalchab = diasalchab*prom_tragos,
+        volbinge = dias_binge*6,
+    voltotal = (volbinge + volalchab) * 13,
+    voltotMS = (volbinge + volalchab) * 16,
+    voltotdia = voltotal/30,
+    voltotMINSAL = voltotMS/30) %>% 
+  filter(oh3 <=30)
+
+
 
