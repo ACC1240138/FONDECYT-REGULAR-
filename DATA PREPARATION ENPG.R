@@ -14,7 +14,7 @@ library(readr)
 enpg08 <- read_rds("https://github.com/ACC1240138/FONDECYT-REGULAR-/raw/main/rawdata/enpg2008.RDS")
 enpg08 <- enpg08 %>% mutate(year = 2008)
 data08 <- enpg08 %>% 
-  select(id, year, area, region,comuna, exp, sexo, edad,  
+  select(id, year, region,comuna, exp, sexo, edad,  
          religion = q277, nedu = q279, ecivil = q281, 
          p_originario = q282, ingreso = q284,oh1 = q12, oh2 = q15, oh3 = q16,
          tab1 = q5,tab2 = q8, tab3 = q9, tab4 = q10, mar1 = q33, mar2 = q36,
@@ -127,6 +127,7 @@ data10 <- enpg10 %>% mutate(year = 2010) %>%
 #############
 # ENPG 2012 #
 #############
+
 enpg12 <- read_rds("https://github.com/ACC1240138/FONDECYT-REGULAR-/raw/main/rawdata/enpg2012.RDS")
 data12 <- enpg12 %>% mutate(year = 2012) %>% 
   select(id = idencuesta, year, region = "región",comuna = "código_comuna",
@@ -137,7 +138,7 @@ data12 <- enpg12 %>% mutate(year = 2012) %>%
          t5 = p118_5, t6 = p118_6, t7 = p118_7, t8 = p118_8, t9 = p118_9, t1_m = p119_1,
          t2_m = p119_2, t3_m = p119_3, t4_m = p119_4, t5_m = p119_5, t6_m = p119_6,
          t7_m = p119_7, t8_m = p119_8, t9_m = p119_9,
-         oh1 = p10, oh2 = p13,audit1 = p19, audit2 = p20, audit3 = p21) %>% 
+         oh1 = p10, oh2 = p13,oh3 = p14, audit1 = p19, audit2 = p20, audit3 = p21) %>% 
 mutate(id = factor(id),
        sexo = factor(sexo, levels = c(1,2), labels = c("Hombre","Mujer")),
        mar1 = factor(mar1, levels = c(1,2), labels = c("Si","No")),
@@ -193,7 +194,7 @@ enpg14 <- read_rds("https://github.com/ACC1240138/FONDECYT-REGULAR-/raw/main/raw
 data14 <- enpg14 %>% mutate(year = 2014) %>% 
   select(id = idencuesta, year, region = Region, comuna = Comuna, exp = RND_F2_MAY_AJUS_com, sexo, edad,
          nedu1 = dp9_1, nedu2 = dp10_1, religion = dp5, ecivil = dp2, 
-         p_originario = dp4, ingreso = dp13, oh1,oh2 = oh4, mar1, mar2 = mar4,coc1 , coc2 = coc4, 
+         p_originario = dp4, ingreso = dp13, oh1,oh2 = oh4, oh3 = oh5, mar1, mar2 = mar4,coc1 , coc2 = coc4, 
          tab1 = st3, tab2 = st6, tab3 = st7, tab4 = st8, t1 = trans1_1, t2 = trans1_2, 
          t3 = trans1_3,t4 = trans1_4, t5 = trans1_5, t6 = trans1_6, t7 = trans1_7,
          t8 = trans1_8, t9 = trans1_9, t1_m = trans3_1, t2_m = trans3_2, t3_m = trans3_3,
@@ -251,7 +252,6 @@ mutate(id = factor(id),
 #############
 enpg16 <- read_rds("https://github.com/ACC1240138/FONDECYT-REGULAR-/raw/main/rawdata/enpg2016.RDS")
 exp16 <- read_rds("https://github.com/ACC1240138/FONDECYT-REGULAR-/raw/main/rawdata/Expansion16.RDS")
-table(enpg16$trans_1_j)
 
 data16 <- enpg16 %>% 
   left_join(exp16, by = "idencuesta") %>% 
@@ -263,7 +263,7 @@ data16 <- enpg16 %>%
          t1_m = trans_3_a, t2_m = trans_3_b, t3_m = trans_3_c, t4_m = trans_3_d,
          t5_m = trans_3_e, t6_m = trans_3_f, t7_m = trans_3_g, t8_m = trans_3_h, 
          t9_m = trans_3_i,
-         oh1 = oh_1, oh2 = oh_4,audit1 = oh_14, audit2 = oh_15,
+         oh1 = oh_1, oh2 = oh_4,oh3 = oh_5, audit1 = oh_14, audit2 = oh_15,
          audit3 = oh_16) %>% 
 mutate(id = factor(id),
   sexo = factor(sexo, levels = c(1,2), labels = c("Hombre","Mujer")),
@@ -325,7 +325,7 @@ data18 <- enpg18 %>%
          tab4 = ST_7, mar1 = MAR_1, mar2 = MAR_4, coc1 = COC_1, coc2 = COC_4, tranq_vida = TRANS_1_O1,
          t1_m = T_TRANS_3_1, t2_m = T_TRANS_3_2, t3_m = T_TRANS_3_3, t4_m = T_TRANS_3_4,
          t5_m = T_TRANS_3_5, t6_m = T_TRANS_3_6, t7_m = T_TRANS_3_7, t8_m = T_TRANS_3_8,
-         t9_m = T_TRANS_3_9,oh1 = OH_1, oh2 = OH_4, audit1 = OH_12, audit2 = OH_13,
+         t9_m = T_TRANS_3_9,oh1 = OH_1, oh2 = OH_4, oh3 = OH_5, audit1 = OH_12, audit2 = OH_13,
          audit3 = OH_14) %>% 
   mutate(id = factor(id),
     sexo = factor(sexo, levels = c(1,2), labels = c("Hombre","Mujer")),
@@ -389,7 +389,7 @@ data20 <- enpg20 %>%
          t7 = TRANS_1_O7, t8 = TRANS_1_O8, t9 = TRANS_1_O9,
          t1_m = T_TRANS_2_1, t2_m = T_TRANS_2_2, t3_m = T_TRANS_2_3, t4_m = T_TRANS_2_4,
          t5_m = T_TRANS_2_5, t6_m = T_TRANS_2_6, t7_m = T_TRANS_2_7, t8_m = T_TRANS_2_8,
-         t9_m = T_TRANS_2_9,oh1 = OH_1, oh2 = OH_4, audit1 = OH_8, audit2 = OH_9,
+         t9_m = T_TRANS_2_9,oh1 = OH_1, oh2 = OH_4, oh3 = OH_5, audit1 = OH_8, audit2 = OH_9,
          audit3 = OH_10) %>% 
   mutate(id = factor(id),
     sexo = factor(sexo, levels = c(1,2), labels = c("Hombre","Mujer")),
@@ -454,7 +454,7 @@ data22 <- enpg22 %>%
          t1_m = T_TRANS_2_1, t2_m = T_TRANS_2_2, t3_m = T_TRANS_2_3, t4_m = T_TRANS_2_4,
          t5_m = T_TRANS_2_5, t6_m = T_TRANS_2_6, t7_m = T_TRANS_2_7, t8_m = T_TRANS_2_8,
          t9_m = T_TRANS_2_9,
-         oh1 = OH_1, oh2 = OH_4, audit1 = OH_8, audit2 = OH_9,
+         oh1 = OH_1, oh2 = OH_4, oh3 = OH_5, audit1 = OH_8, audit2 = OH_9,
          audit3 = OH_10) %>% 
   mutate(id = factor(id),
     sexo = factor(sexo, levels = c(1,2), labels = c("Hombre","Mujer")),
@@ -516,4 +516,8 @@ write_rds(enpg_full, "ENPG_FULL.RDS", compress = "gz")
 # ESTIMATE ALCOHOL USE #
 ########################
 
-enpg_full <- 
+rm(list = ls())
+gc()
+
+enpg_full <- readRDS("enpg_full.RDS")
+
