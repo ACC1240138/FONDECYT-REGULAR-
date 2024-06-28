@@ -519,7 +519,6 @@ write_rds(enpg_full, "ENPG_FULL.RDS", compress = "gz")
 rm(list = ls())
 gc()
 
-table(data$audit2)
 enpg_full <- readRDS("enpg_full.RDS")
 data <- enpg_full %>% 
   filter(edad >=15) %>% 
