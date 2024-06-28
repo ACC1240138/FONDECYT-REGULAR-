@@ -1,8 +1,9 @@
 #########################
 # MORTALITY PREPARATION #
 #########################
-
-
+library(readr)
+library(dplyr)
+library(stringr)
 m1 <- read_rds("https://github.com/ACC1240138/FONDECYT-REGULAR-/raw/main/rawdata/defunciones1.RDS") 
 m2 <- read_rds("https://github.com/ACC1240138/FONDECYT-REGULAR-/raw/main/rawdata/defunciones2.RDS") 
 
@@ -39,6 +40,168 @@ def <- def %>%
 ################################
 # PARTIALLY ATTRIBUTABLE TO OH #
 ################################
+fire_and_burn_codes <- c(
+  paste0("X00", 0:9), # X000 to X009
+  paste0("X01", 0:9), # X010 to X019
+  paste0("X02", 0:9), # X020 to X029
+  paste0("X03", 0:9), # X030 to X039
+  paste0("X04", 0:9), # X040 to X049
+  paste0("X05", 0:9), # X050 to X059
+  paste0("X06", 0:9), # X060 to X069
+  paste0("X07", 0:9), # X070 to X079
+  paste0("X08", 0:9), # X080 to X089
+  paste0("X09", 0:9)  # X090 to X099
+)
+accidental_poisoning_codes <- c(
+  paste0("X40", 0:9), # X400 to X409
+  paste0("X46", 0:9), # X460 to X469
+  paste0("X47", 0:9), # X470 to X479
+  paste0("X48", 0:9), # X480 to X489
+  paste0("X49", 0:9)  # X490 to X499
+)
+falls_codes <- c(
+  paste0("W00", 0:9), # W000 to W009
+  paste0("W01", 0:9), # W010 to W019
+  paste0("W02", 0:9), # W020 to W029
+  paste0("W03", 0:9), # W030 to W039
+  paste0("W04", 0:9), # W040 to W049
+  paste0("W05", 0:9), # W050 to W059
+  paste0("W06", 0:9), # W060 to W069
+  paste0("W07", 0:9), # W070 to W079
+  paste0("W08", 0:9), # W080 to W089
+  paste0("W09", 0:9), # W090 to W099
+  paste0("W10", 0:9), # W100 to W109
+  paste0("W11", 0:9), # W110 to W119
+  paste0("W12", 0:9), # W120 to W129
+  paste0("W13", 0:9), # W130 to W139
+  paste0("W14", 0:9), # W140 to W149
+  paste0("W15", 0:9), # W150 to W159
+  paste0("W16", 0:9), # W160 to W169
+  paste0("W17", 0:9), # W170 to W179
+  paste0("W18", 0:9), # W180 to W189
+  paste0("W19", 0:9)  # W190 to W199
+)
+drowning_codes <- c(
+  paste0("W65", 0:9), # W650 to W659
+  paste0("W66", 0:9), # W660 to W669
+  paste0("W67", 0:9), # W670 to W679
+  paste0("W68", 0:9), # W680 to W689
+  paste0("W69", 0:9), # W690 to W699
+  paste0("W70", 0:9), # W700 to W709
+  paste0("W71", 0:9), # W710 to W719
+  paste0("W72", 0:9), # W720 to W729
+  paste0("W73", 0:9), # W730 to W739
+  paste0("W74", 0:9)  # W740 to W749
+)
+transport_accidents_codes <- c(
+  "V021", "V022", "V023", "V024", "V025", "V026", "V027", "V028", "V029",
+  "V031", "V032", "V033", "V034", "V035", "V036", "V037", "V038", "V039",
+  "V041", "V042", "V043", "V044", "V045", "V046", "V047", "V048", "V049",
+  "V092", "V093", 
+  "V123", "V124", "V125", "V126", "V127", "V128", "V129", 
+  "V133", "V134", "V135", "V136", "V137", "V138", "V139", 
+  "V143", "V144", "V145", "V146", "V147", "V148", "V149",
+  "V194", "V195", "V196",
+  "V203", "V204", "V205", "V206", "V207", "V208", "V209", 
+  "V213", "V214", "V215", "V216", "V217", "V218", "V219", 
+  "V223", "V224", "V225", "V226", "V227", "V228", "V229",
+  "V233", "V234", "V235", "V236", "V237", "V238", "V239",
+  "V243", "V244", "V245", "V246", "V247", "V248", "V249",
+  "V253", "V254", "V255", "V256", "V257", "V258", "V259",
+  "V263", "V264", "V265", "V266", "V267", "V268", "V269",
+  "V273", "V274", "V275", "V276", "V277", "V278", "V279",
+  "V283", "V284", "V285", "V286", "V287", "V288", "V289",
+  "V294", "V295", "V296", "V297", "V298", "V299",
+  "V304", "V305", "V306", "V307", "V308", "V309", 
+  "V314", "V315", "V316", "V317", "V318", "V319", 
+  "V324", "V325", "V326", "V327", "V328", "V329", 
+  "V334", "V335", "V336", "V337", "V338", "V339", 
+  "V344", "V345", "V346", "V347", "V348", "V349", 
+  "V354", "V355", "V356", "V357", "V358", "V359", 
+  "V364", "V365", "V366", "V367", "V368", "V369", 
+  "V374", "V375", "V376", "V377", "V378", "V379", 
+  "V384", "V385", "V386", "V387", "V388", "V389",
+  "V394", "V395", "V396", "V397", "V398", "V399",
+  "V404", "V405", "V406", "V407", "V408", "V409",
+  "V414", "V415", "V416", "V417", "V418", "V419",
+  "V424", "V425", "V426", "V427", "V428", "V429",
+  "V434", "V435", "V436", "V437", "V438", "V439",
+  "V444", "V445", "V446", "V447", "V448", "V449",
+  "V454", "V455", "V456", "V457", "V458", "V459",
+  "V464", "V465", "V466", "V467", "V468", "V469",
+  "V474", "V475", "V476", "V477", "V478", "V479",
+  "V484", "V485", "V486", "V487", "V488", "V489",
+  "V494", "V495", "V496", "V497", "V498", "V499",
+  "V504", "V505", "V506", "V507", "V508", "V509",
+  "V514", "V515", "V516", "V517", "V518", "V519",
+  "V524", "V525", "V526", "V527", "V528", "V529",
+  "V534", "V535", "V536", "V537", "V538", "V539",
+  "V544", "V545", "V546", "V547", "V548", "V549",
+  "V554", "V555", "V556", "V557", "V558", "V559",
+  "V564", "V565", "V566", "V567", "V568", "V569",
+  "V574", "V575", "V576", "V577", "V578", "V579",
+  "V584", "V585", "V586", "V587", "V588", "V589",
+  "V594", "V595", "V596", "V597", "V598", "V599",
+  "V604", "V605", "V606", "V607", "V608", "V609",
+  "V614", "V615", "V616", "V617", "V618", "V619",
+  "V624", "V625", "V626", "V627", "V628", "V629",
+  "V634", "V635", "V636", "V637", "V638", "V639",
+  "V644", "V645", "V646", "V647", "V648", "V649",
+  "V654", "V655", "V656", "V657", "V658", "V659",
+  "V664", "V665", "V666", "V667", "V668", "V669",
+  "V674", "V675", "V676", "V677", "V678", "V679",
+  "V684", "V685", "V686", "V687", "V688", "V689",
+  "V694", "V695", "V696", "V697", "V698", "V699",
+  "V704", "V705", "V706", "V707", "V708", "V709",
+  "V714", "V715", "V716", "V717", "V718", "V719",
+  "V724", "V725", "V726", "V727", "V728", "V729",
+  "V734", "V735", "V736", "V737", "V738", "V739",
+  "V744", "V745", "V746", "V747", "V748", "V749",
+  "V754", "V755", "V756", "V757", "V758", "V759",
+  "V764", "V765", "V766", "V767", "V768", "V769",
+  "V774", "V775", "V776", "V777", "V778", "V779",
+  "V784", "V785", "V786", "V787", "V788", "V789",
+  "V794", "V795", "V796", "V797", "V798", "V799",
+  "V803", "V804", "V805", "V811", "V821", 
+  "V830", "V831", "V832", "V833", 
+  "V840", "V841", "V842", "V843", 
+  "V850", "V851", "V852", "V853", 
+  "V860", "V861", "V862", "V863", 
+  "V870", "V871", "V872", "V873", "V874", "V875", "V876", "V877", "V878", "V892"
+)
+other_injuries_codes <- c(
+  paste0("W20", 0:9), paste0("W21", 0:9), paste0("W22", 0:9), paste0("W23", 0:9), paste0("W24", 0:9), paste0("W25", 0:9),
+  paste0("W26", 0:9), paste0("W27", 0:9), paste0("W28", 0:9), paste0("W29", 0:9), paste0("W30", 0:9),
+  paste0("W31", 0:9), paste0("W32", 0:9), paste0("W33", 0:9), paste0("W34", 0:9), paste0("W35", 0:9),
+  paste0("W36", 0:9), paste0("W37", 0:9), paste0("W38", 0:9), paste0("W39", 0:9), paste0("W40", 0:9),
+  paste0("W41", 0:9), paste0("W42", 0:9), paste0("W43", 0:9), paste0("W44", 0:9), paste0("W45", 0:9),
+  paste0("W46", 0:9), paste0("W47", 0:9), paste0("W48", 0:9), paste0("W49", 0:9), paste0("W50", 0:9),
+  paste0("W51", 0:9), paste0("W52", 0:9), paste0("W53", 0:9), paste0("W54", 0:9), paste0("W55", 0:9),
+  paste0("W56", 0:9), paste0("W57", 0:9), paste0("W58", 0:9), paste0("W59", 0:9), paste0("W60", 0:9),
+  paste0("W61", 0:9), paste0("W62", 0:9), paste0("W63", 0:9), paste0("W64", 0:9),
+  paste0("W75", 0:9), paste0("W76", 0:9), paste0("W77", 0:9), paste0("W78", 0:9), paste0("W79", 0:9),
+  paste0("W80", 0:9), paste0("W81", 0:9), paste0("W82", 0:9), paste0("W83", 0:9), paste0("W84", 0:9),
+  paste0("W85", 0:9), paste0("W86", 0:9), paste0("W87", 0:9), paste0("W88", 0:9), paste0("W89", 0:9),
+  paste0("W90", 0:9), paste0("W91", 0:9), paste0("W92", 0:9), paste0("W93", 0:9), paste0("W94", 0:9),
+  paste0("W95", 0:9), paste0("W96", 0:9), paste0("W97", 0:9), paste0("W98", 0:9), paste0("W99", 0:9),
+  paste0("X10", 0:9), paste0("X11", 0:9), paste0("X12", 0:9), paste0("X13", 0:9), paste0("X14", 0:9),
+  paste0("X15", 0:9), paste0("X16", 0:9), paste0("X17", 0:9), paste0("X18", 0:9), paste0("X19", 0:9),
+  paste0("X20", 0:9), paste0("X21", 0:9), paste0("X22", 0:9), paste0("X23", 0:9), paste0("X24", 0:9),
+  paste0("X25", 0:9), paste0("X26", 0:9), paste0("X27", 0:9), paste0("X28", 0:9), paste0("X29", 0:9),
+  paste0("X30", 0:9), paste0("X31", 0:9), paste0("X32", 0:9), paste0("X33", 0:9), paste0("X34", 0:9),
+  paste0("X35", 0:9), paste0("X36", 0:9), paste0("X37", 0:9), paste0("X38", 0:9), paste0("X39", 0:9),
+  paste0("X50", 0:9), paste0("X51", 0:9), paste0("X52", 0:9), paste0("X53", 0:9), paste0("X54", 0:9),
+  paste0("X55", 0:9), paste0("X56", 0:9), paste0("X57", 0:9), paste0("X58", 0:9), paste0("X59", 0:9),
+  paste0("Y40", 0:9), paste0("Y41", 0:9), paste0("Y42", 0:9), paste0("Y43", 0:9), paste0("Y44", 0:9),
+  paste0("Y45", 0:9), paste0("Y46", 0:9), paste0("Y47", 0:9), paste0("Y48", 0:9), paste0("Y49", 0:9),
+  paste0("Y50", 0:9), paste0("Y51", 0:9), paste0("Y52", 0:9), paste0("Y53", 0:9), paste0("Y54", 0:9),
+  paste0("Y55", 0:9), paste0("Y56", 0:9), paste0("Y57", 0:9), paste0("Y58", 0:9), paste0("Y59", 0:9),
+  paste0("Y60", 0:9), paste0("Y61", 0:9), paste0("Y62", 0:9), paste0("Y63", 0:9), paste0("Y64", 0:9),
+  paste0("Y65", 0:9), paste0("Y66", 0:9), paste0("Y67", 0:9), paste0("Y68", 0:9), paste0("Y69", 0:9),
+  paste0("Y70", 0:9), paste0("Y71", 0:9), paste0("Y72", 0:9), paste0("Y73", 0:9), paste0("Y74", 0:9),
+  paste0("Y75", 0:9), paste0("Y76", 0:9), paste0("Y77", 0:9), paste0("Y78", 0:9), paste0("Y79", 0:9),
+  paste0("Y80", 0:9), paste0("Y81", 0:9), paste0("Y82", 0:9), paste0("Y83", 0:9), paste0("Y84", 0:9),
+  paste0("Y85", 0:9), paste0("Y86", 0:9), paste0("Y88",0:9), paste0("Y89", 0:9))
 
 def <- def %>% 
   mutate(epilep = if_else(DIAG1 %in% c("G400", "G401", "G402", "G403", "G404", "G405", "G406", "G407", "G408", "G409", 
@@ -74,8 +237,8 @@ def <- def %>%
                                         "C120", "C121", "C122", "C123", "C124", "C125", "C126", "C127", "C128", "C129",
                                         "C130", "C131", "C132", "C133", "C134", "C135", "C136", "C137", "C138", "C139",
                                         "C140", "C141", "C142", "C143", "C144", "C145", "C146", "C147", "C148", "C149"), 1, 0),
-         ca_recto = ifelse(DIAG1 == "C20X"),
-         arritmias = ifelse(DIAG1 == "I48X"),
+         ca_recto = ifelse(DIAG1 == "C20X",1,0),
+         arritmias = ifelse(DIAG1 == "I48X",1,0),
          diabetes = if_else(DIAG1 %in% c("E110", "E111", "E112", "E113", "E114", "E115", "E116", "E117", "E118", "E119"), 1, 0),
          ihd = if_else(DIAG1 %in% c("I200", "I201", "I202", "I203", "I204", "I205", "I206", "I207", "I208", "I209",
                                     "I210", "I211", "I212", "I213", "I214", "I215", "I216", "I217", "I218", "I219",
@@ -97,10 +260,27 @@ def <- def %>%
          pancreati = if_else(DIAG1 %in% c("K850", "K851", "K852", "K853", "K854", "K855", "K856", "K857", "K858", "K859", "K861"), 1, 0),
          cirrosis = if_else(DIAG1 %in% c("K700", "K701", "K702", "K703", "K704", "K705", "K706", "K707", "K708", "K709",
                                          "K740", "K741", "K742", "K743", "K744", "K745", "K746", "K760", "K769"), 1, 0),
-         )
+         
+         accidental_poisoning = if_else(DIAG2 %in% accidental_poisoning_codes, 1, 0),
+         falls = if_else(DIAG2 %in% falls_codes, 1, 0),
+         fires = if_else(DIAG2 %in% fire_and_burn_codes, 1, 0),
+         drowning = if_else(DIAG2 %in% drowning_codes, 1, 0),
+         transport_accidents = if_else(DIAG2 %in% transport_accidents_codes, 1, 0),
+         other_injuries = if_else(
+           DIAG2 %in% other_injuries_codes | 
+             (str_detect(DIAG2, "^V") & !DIAG2 %in% transport_accidents_codes), 
+           1, 0))
+
+
+
+
+
+         
+
 
 
 # PREGUNTAR: - Motor vehicle accidents, Accidental poisoning, Falls,Fires,Drowning,
 # Other Unintentional injuries, Self-inflicted injuries, Homicide, Other intentional injuries
 
 # ES DIAG1 O DIAG2?
+
