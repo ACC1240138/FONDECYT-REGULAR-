@@ -543,7 +543,47 @@ data <- enpg_full %>%
     voltotal = (volbinge + volalchab) * 13,
     voltotMS = (volbinge + volalchab) * 16,
     voltotdia = voltotal/30,
-    voltotMINSAL = voltotMS/30) %>% 
+    voltotMINSAL = voltotMS/30,
+    catohaj = case_when(
+      sexo == "Mujer" & voltotdia == 0 ~ 0,
+      sexo == "Mujer" & voltotdia > 0 & voltotdia <= 19.99 ~ 1,
+      sexo == "Mujer" & voltotdia >= 20 & voltotdia <= 39.99 ~ 2,
+      sexo == "Mujer" & voltotdia >= 40 & voltotdia <= 1000 ~ 3,
+      sexo == "Hombre" & voltotdia == 0 ~ 0,
+      sexo == "Hombre" & voltotdia > 0 & voltotdia <= 39.99 ~ 1,
+      sexo == "Hombre" & voltotdia >= 40 & voltotdia <= 59.99 ~ 2,
+      sexo == "Hombre" & voltotdia >= 60 & voltotdia <= 1000 ~ 3,
+      TRUE ~ NA_real_),
+      catohaj = factor(catohaj, levels = 0:3, 
+                              labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3")),
+      catohMS = case_when(
+      sexo == "Mujer" & voltotMINSAL == 0 ~ 0,
+      sexo == "Mujer" & voltotMINSAL > 0 & voltotMINSAL <= 19.99 ~ 1,
+      sexo == "Mujer" & voltotMINSAL >= 20 & voltotMINSAL <= 39.99 ~ 2,
+      sexo == "Mujer" & voltotMINSAL >= 40 & voltotMINSAL <= 1000 ~ 3,
+      sexo == "Hombre" & voltotMINSAL == 0 ~ 0,
+      sexo == "Hombre" & voltotMINSAL > 0 & voltotMINSAL <= 39.99 ~ 1,
+      sexo == "Hombre" & voltotMINSAL >= 40 & voltotMINSAL <= 59.99 ~ 2,
+      sexo == "Hombre" & voltotMINSAL >= 60 & voltotMINSAL <= 1000 ~ 3,
+      TRUE ~ NA_real_),
+      catohMS = factor(catohMS, levels = 0:3, 
+                       labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3")),
+    volCH = (voltotdia*365)/1000,
+    volCHMS = (voltotMINSAL*365)/1000,
+    volajoh = volCH*5.02,                       # PREGUNTAR POR ESTE FACTOR POR AÑO
+    volajohdia = (volajoh/365)*1000,
+    cvolaj = case_when(
+      sexo == "Mujer" & volajohdia == 0 ~ 0,
+      sexo == "Mujer" & volajohdia > 0 & volajohdia <= 19.99 ~ 1,
+      sexo == "Mujer" & volajohdia >= 20 & volajohdia <= 39.99 ~ 2,
+      sexo == "Mujer" & volajohdia >= 40 & volajohdia <= 1000 ~ 3,
+      sexo == "Hombre" & volajohdia == 0 ~ 0,
+      sexo == "Hombre" & volajohdia > 0 & volajohdia <= 39.99 ~ 1,
+      sexo == "Hombre" & volajohdia >= 40 & volajohdia <= 59.99 ~ 2,
+      sexo == "Hombre" & volajohdia >= 60 & volajohdia <= 1000 ~ 3,
+      TRUE ~ NA_real_),
+      cvolaj = factor(cvolaj, levels = 0:3, 
+                       labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3")))
   filter(oh3 <=30)
 
 
