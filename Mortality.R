@@ -278,11 +278,14 @@ rm(accidental_poisoning_codes, drowning_codes, falls_codes,
 
 # ELIMINAR COLUMNAS DE DEF
 
-
+# EXTRAER EL RR DE LA LITERATURA PARA CADA CATEGORIA DE CONSUMO
+# OBTENER LA PREVALENCIA POR SUBGRUPO (SEXO)
+# REVISAR ARTICULOS DE LA OMS
 
 
 # PREGUNTAR: - Motor vehicle accidents, Accidental poisoning, Falls,Fires,Drowning,
 # Other Unintentional injuries, Self-inflicted injuries, Homicide, Other intentional injuries
 
 # ES DIAG1 O DIAG2?
+
 

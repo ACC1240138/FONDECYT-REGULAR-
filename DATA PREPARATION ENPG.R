@@ -535,16 +535,16 @@ data <- enpg_full %>%
                                 audit3 == "semanalmente" ~ 4,
                                 audit3 == "todos o casi todos los dias" ~ 20),
          diasalchab = oh3-dias_binge,
-         diasalchab = ifelse(diasalchab < 0, 0, diasalchab),
+         diasalchab = ifelse(diasalchab < 0, 0, diasalchab), # PREGUNTAR/ REVISRA AÑO DE ESTO
          volalchab = diasalchab*prom_tragos,
-        volbinge = dias_binge*6,
+        volbinge = dias_binge*6, # PREGUNTAR POR QUÉ X6?
     voltotal = (volbinge + volalchab) * 13,
     voltotMS = (volbinge + volalchab) * 16,
     voltotdia = voltotal/30,
     voltotMINSAL = voltotMS/30,
     catohaj = case_when(
       sexo == "Mujer" & voltotdia == 0 ~ 0,
-      sexo == "Mujer" & voltotdia > 0 & voltotdia <= 19.99 ~ 1,
+      sexo == "Mujer" & voltotdia > 0 & voltotdia <= 19.99 ~ 1, # REVISAR ESTO EN EL PROYECTO
       sexo == "Mujer" & voltotdia >= 20 & voltotdia <= 39.99 ~ 2,
       sexo == "Mujer" & voltotdia >= 40 & voltotdia <= 1000 ~ 3,
       sexo == "Hombre" & voltotdia == 0 ~ 0,
@@ -568,7 +568,7 @@ data <- enpg_full %>%
                        labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3")),
     volCH = (voltotdia*365)/1000,
     volCHMS = (voltotMINSAL*365)/1000,
-    volajoh = volCH*5.02,                       # PREGUNTAR POR ESTE FACTOR POR AÑO
+    volajoh = volCH*5.02, # PREGUNTAR POR ESTE FACTOR POR AÑO/ CALCULAR POR AÑO
     volajohdia = (volajoh/365)*1000,
     cvolaj = case_when(
       sexo == "Mujer" & volajohdia == 0 ~ 0,
@@ -586,3 +586,18 @@ data <- enpg_full %>%
 
 rm(enpg_full)
 
+# CALCULO DE FACTOR POR AÑO
+# REVISAR LA OMS, EL CONSUMO PC EN LITROS SE MULTIPLICA POR 
+# LA DENSIDAD DE ALCOHOL, PARA TRANSFORMAR A MASA
+# QUE ES 0.789 (PARA TRANSFORMAR A KG)
+# Y LUEGO MULTIPLICAR POR 1000 PARA PASAR A GRAMOS
+# SE ESTIMA EL TOTAL Y SE DIVIDE POR EL TOTAL DE LA ENCUESTA
+# CON LOS FACTORES DE EXPANSION INCLUIDAS
+# TOTALIDAD DE ALCOHOL REGISTRADO EN LA ENCUESTA
+# ESO DA EL PER CAPITA
+# ESE PER CAPITA SERÁ MENOR AL REPORTADO EN LA OMS.
+# LUEGO LO QUE HAY QUE HACER ES ENCONTRAR EL FACTOR
+# QUE MULTIPLICADO DA EL CONSUMO DE ALCOHOL REPORTADO EN LA OMS
+# crear la categoría 4 DE CONSUMO DE ALCOHOL.
+
+# AJUSTAR EL INGRESO SEGUN IPC
