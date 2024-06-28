@@ -273,9 +273,11 @@ def <- def %>%
 
 
 
+rm(accidental_poisoning_codes, drowning_codes, falls_codes,
+   fire_and_burn_codes, other_injuries_codes, transport_accidents_codes)
 
+# ELIMINAR COLUMNAS DE DEF
 
-         
 
 
 

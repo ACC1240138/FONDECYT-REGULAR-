@@ -4,7 +4,6 @@
 
 # LIBRARIES
 library(dplyr)
-library(haven)
 library(readr)
 
 #############
@@ -582,8 +581,8 @@ data <- enpg_full %>%
       sexo == "Hombre" & volajohdia >= 60 & volajohdia <= 1000 ~ 3,
       TRUE ~ NA_real_),
       cvolaj = factor(cvolaj, levels = 0:3, 
-                       labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3")))
+                       labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3"))) %>% 
   filter(oh3 <=30)
 
-
+rm(enpg_full)
 
