@@ -5,7 +5,7 @@
 # LIBRARIES
 library(dplyr)
 library(readr)
-
+library(haven)
 #############
 # ENPG 2008 #
 #############
@@ -517,12 +517,14 @@ write_rds(enpg_full, "ENPG_FULL.RDS", compress = "gz")
 
 rm(list = ls())
 gc()
+library(dplyr)
+library(readr)
 
 enpg_full <- readRDS("enpg_full.RDS")
 data <- enpg_full %>% 
   filter(edad >=15) %>% 
   mutate(oh3 = case_when(oh1 == "No"| oh2 == ">30" | oh2 == ">1 año"~ 0,
-                         TRUE ~oh3),
+                         TRUE ~ oh3),
     prom_tragos = case_when(oh1 == "No" | oh2 == ">30" | oh2 == ">1 año"  ~ 0,
                                 audit2 == "0-2"~ 1,
                                  audit2 == "3-4"~ 3.5,
@@ -566,26 +568,81 @@ data <- enpg_full %>%
       TRUE ~ NA_real_),
       catohMS = factor(catohMS, levels = 0:3, 
                        labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3")),
-    volCH = (voltotdia*365)/1000,
-    volCHMS = (voltotMINSAL*365)/1000,
-    volajoh = volCH*5.02, # PREGUNTAR POR ESTE FACTOR POR AÑO/ CALCULAR POR AÑO
-    volajohdia = (volajoh/365)*1000,
-    cvolaj = case_when(
-      sexo == "Mujer" & volajohdia == 0 ~ 0,
-      sexo == "Mujer" & volajohdia > 0 & volajohdia <= 19.99 ~ 1,
-      sexo == "Mujer" & volajohdia >= 20 & volajohdia <= 39.99 ~ 2,
-      sexo == "Mujer" & volajohdia >= 40 & volajohdia <= 1000 ~ 3,
-      sexo == "Hombre" & volajohdia == 0 ~ 0,
-      sexo == "Hombre" & volajohdia > 0 & volajohdia <= 39.99 ~ 1,
-      sexo == "Hombre" & volajohdia >= 40 & volajohdia <= 59.99 ~ 2,
-      sexo == "Hombre" & volajohdia >= 60 & volajohdia <= 1000 ~ 3,
-      TRUE ~ NA_real_),
-      cvolaj = factor(cvolaj, levels = 0:3, 
-                       labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3"))) %>% 
+    volCH = (voltotdia*365),
+    volCHMS = (voltotMINSAL*365)) %>% 
   filter(oh3 <=30)
 
-rm(enpg_full)
+# CONSUMO PC OMS
+# 2008 = 7.8
+total_volCH <- data %>% 
+  group_by(year) %>% 
+  filter(!is.na(volCH)) %>% 
+  summarise(pop = sum(exp),
+            pc_totalvolCH = sum(volCH*exp)/pop) 
+round((7.8*0.789)*1000,2)
+conversion <- function(x,vol){
+  oms=round((x*0.789)*1000,2)
+  round(oms/vol,2)
+}
 
+conversion(7.8,total_volCH[1,3])
+# 6.9
+
+# 2010 = 7.8
+conversion(7.8,total_volCH[2,3])
+# 6.64
+
+# 2012 = 7.9
+conversion(7.9,total_volCH[3,3])
+# 6.83
+
+# 2014 = 8.0
+conversion(8.0,total_volCH[4,3])
+# 7.02
+
+# 2016 = 7.0
+conversion(7.0,total_volCH[5,3])
+# 5.5
+
+# 2018 = 6.7
+conversion(6.7,total_volCH[6,3])
+# 3.02
+
+# 2020 = 7.6
+conversion(7.6,total_volCH[7,3])
+# 6.15
+
+# 2022 = 7.6 (repetido)
+conversion(7.6,total_volCH[8,3])
+# 7.11
+data <- data %>% 
+mutate(volaj = case_when(year == 2008 ~ volCH*6.9,
+                         year == 2010 ~ volCH*6.64,
+                         year == 2012 ~ volCH*6.83,
+                         year == 2014 ~ volCH*7.02,
+                         year == 2016 ~ volCH*5.5,
+                         year == 2018 ~ volCH*3.02,
+                         year == 2020 ~ volCH*6.15,
+                         year == 2022 ~ volCH*7.11),
+       volajohdia = volaj/365,
+       cvolaj = case_when(
+  sexo == "Mujer" & volajohdia == 0 ~ 0,
+  sexo == "Mujer" & volajohdia > 0 & volajohdia <= 19.99 ~ 1,
+  sexo == "Mujer" & volajohdia >= 20 & volajohdia <= 39.99 ~ 2,
+  sexo == "Mujer" & volajohdia >= 40 & volajohdia <= 1000 ~ 3,
+  sexo == "Hombre" & volajohdia == 0 ~ 0,
+  sexo == "Hombre" & volajohdia > 0 & volajohdia <= 39.99 ~ 1,
+  sexo == "Hombre" & volajohdia >= 40 & volajohdia <= 59.99 ~ 2,
+  sexo == "Hombre" & volajohdia >= 60 & volajohdia <= 1000 ~ 3,
+  TRUE ~ NA_real_),
+cvolaj = factor(cvolaj, levels = 0:3, 
+                labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3"))) 
+
+total_volajCH <- data %>% 
+  group_by(year) %>% 
+  filter(!is.na(volaj)) %>% 
+  summarise(pop = sum(exp),
+            pc_totalvolCH = sum(volaj*exp)/pop) 
 # CALCULO DE FACTOR POR AÑO
 # REVISAR LA OMS, EL CONSUMO PC EN LITROS SE MULTIPLICA POR 
 # LA DENSIDAD DE ALCOHOL, PARA TRANSFORMAR A MASA
