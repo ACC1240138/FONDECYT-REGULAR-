@@ -674,11 +674,26 @@ library(ggplot2)
 
 # Clean the data: remove missing or infinite values
 clean_data <- data %>%
-  filter(!is.na(volajohdia) & is.finite(volajohdia))
+  filter(!is.na(volajohdia) & is.finite(volajohdia)) %>% 
+  filter(volajohdia > 0)
+
 
 install.packages("fitdistrplus")
 library(fitdistrplus)
 library(pracma)
+
+log_volajohdia <- log(clean_data$volajohdia)
+gamma_fit <- fitdist(log_volajohdia, "gamma")
+shape <- gamma_fit$estimate["shape"]
+rate <- gamma_fit$estimate["rate"]
+
+
+qqplot(qgamma(ppoints(log_volajohdia), shape = shape, rate = rate), log_volajohdia,
+       main = "Q-Q Plot of volajohdia vs. Theoretical Gamma Distribution",
+       xlab = "Theoretical Quantiles", ylab = "Sample Quantiles")
+abline(0, 1, col = "red")
+
+
 
 # Fit a Gamma Distribution
 mean_data <- mean(clean_data$volajohdia)
