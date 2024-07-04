@@ -519,7 +519,7 @@ rm(list = ls())
 gc()
 library(dplyr)
 library(readr)
-
+library(haven)
 enpg_full <- readRDS("enpg_full.RDS")
 data <- enpg_full %>% 
   filter(edad >=15) %>% 
@@ -572,6 +572,7 @@ data <- enpg_full %>%
     volCHMS = (voltotMINSAL*365)) %>% 
   filter(oh3 <=30)
 
+rm(enpg_full)
 # CONSUMO PC OMS
 # 2008 = 7.8
 total_volCH <- data %>% 
@@ -677,47 +678,95 @@ clean_data <- data %>%
 
 install.packages("fitdistrplus")
 library(fitdistrplus)
+library(pracma)
 
 # Fit a Gamma Distribution
 mean_data <- mean(clean_data$volajohdia)
 var_data <- var(clean_data$volajohdia)
 shape_init <- mean_data^2 / var_data
 rate_init <- mean_data / var_data
-x <- rnorm(500,10,1)
-fitdistr(x, "gamma")
-volajohdia <- clean_data$volajohdia
-fit <- fitdist(volajohdia, "gamma")
-shape <- fit$estimate["shape"]
-rate <- fit$estimate["rate"]
+simulated_data <- rgamma(n = length(clean_data$volajohdia), shape = shape_init, rate = rate_init)
 
-if (is.finite(shape_init) && is.finite(rate_init) && shape_init > 0 && rate_init > 0) {
-  # Fit the Gamma Distribution using fitdistrplus
-  fit <- tryCatch({
-    fitdist(volajohdia_data, "gamma", start = list(shape = shape_init, rate = rate_init))
-  }, error = function(e) {
-    stop("Error in fitting gamma distribution: ", e$message)
-  })
-# Display the fit parameters
-fit
-
-# Visual Inspection: Histogram and Q-Q plot
-ggplot(clean_data, aes(x = volajohdia)) +
+# Plot the histogram of the sample data and overlay the density of the simulated data
+ggplot2::ggplot(clean_data, aes(x = volajohdia)) +
   geom_histogram(aes(y = ..density..), bins = 30, fill = "blue", alpha = 0.5) +
-  stat_function(fun = dgamma, args = list(shape = shape, rate = rate), col = "red", size = 1) +
-  labs(title = "Histogram of volajohdia with Gamma Density Curve", x = "volajohdia", y = "Density")
-
-# Q-Q plot
-qqplot(qgamma(ppoints(clean_data$volajohdia), shape = shape, rate = rate), clean_data$volajohdia,
-       main = "Q-Q Plot of volajohdia vs. Gamma Distribution",
+  geom_density(aes(y = ..density..), col = "red") +
+  stat_function(fun = dgamma, args = list(shape = shape_init, rate = rate_init), col = "green", size = 1) +
+  labs(title = "Histogram of volajohdia with Simulated Gamma Density Curve", x = "volajohdia", y = "Density")
+#Q-Q plot
+volajohdia_data <- clean_data$volajohdia
+qqplot(qgamma(ppoints(volajohdia_data), shape = shape_init, rate = rate_init), volajohdia_data,
+       main = "Q-Q Plot of volajohdia vs. Theoretical Gamma Distribution",
        xlab = "Theoretical Quantiles", ylab = "Sample Quantiles")
 abline(0, 1, col = "red")
 
 # Goodness-of-Fit Test: Kolmogorov-Smirnov Test
-ks_test <- ks.test(clean_data$volajohdia, "pgamma", shape = shape, rate = rate)
-
+ks_test <- ks.test(volajohdia_data, "pgamma", shape = shape_init, rate = rate_init)
+print(ks_test)
 # Optionally: Anderson-Darling Test
-ad_test <- ad.test(clean_data$volajohdia, pgamma, shape = shape, rate = rate)
+ad_test <- ad.test(volajohdia_data, pgamma, shape = shape_init, rate = rate_init)
+
+# LOG TRANSFORMATION
+log_volajohdia_data <- log(volajohdia_data[volajohdia_data > 0])  # Apply log transformation
+
+# Fit the Gamma Distribution using fitdistrplus
+fit_log <- fitdist(log_volajohdia_data, "gamma")
+shape_log <- fit_log$estimate["shape"]
+rate_log <- fit_log$estimate["rate"]
+
+print(fit_log)
+
+# Visual Inspection: Histogram and Theoretical Gamma Density Curve for transformed data
+ggplot(data.frame(log_volajohdia = log_volajohdia_data), aes(x = log_volajohdia)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "blue", alpha = 0.5) +
+  stat_function(fun = dgamma, args = list(shape = shape_log, rate = rate_log), col = "green", size = 1) +
+  labs(title = "Histogram of Log-transformed volajohdia with Theoretical Gamma Density Curve", x = "log(volajohdia)", y = "Density")
+
+# Q-Q plot for transformed data
+qqplot(qgamma(ppoints(log_volajohdia_data), shape = shape_log, rate = rate_log), log_volajohdia_data,
+       main = "Q-Q Plot of Log-transformed volajohdia vs. Theoretical Gamma Distribution",
+       xlab = "Theoretical Quantiles", ylab = "Sample Quantiles")
+abline(0, 1, col = "red")
+
+# Goodness-of-Fit Test: Kolmogorov-Smirnov Test for transformed data
+ks_test_log <- ks.test(log_volajohdia_data, "pgamma", shape = shape_log, rate = rate_log)
+
+# Optionally: Anderson-Darling Test for transformed data
+ad_test_log <- ad.test(log_volajohdia_data, pgamma, shape = shape_log, rate = rate_log)
 
 # Display results
-ks_test
-ad_test
+print(ks_test_log)
+print(ad_test_log)
+
+
+# RELATIVE RISK OF TUBERCULOSIS
+
+calculate_PAF <- function(data, alcohol_col, beta_1, from = 0, to = 150) {
+  # Calculate RR for each individual in the dataset
+  data <- data %>%
+    mutate(RR_CD = exp(beta_1 * !!sym(alcohol_col)))
+  
+  # Estimate the prevalence function P_CD(x)
+  density_est <- density(data[[alcohol_col]], from = from, to = to, n = 1000)
+  P_CD <- approxfun(density_est$x, density_est$y, rule = 2)  # Rule 2 for extrapolation
+  
+  # Define the integrand function for the numerator and denominator
+  integrand <- function(x) {
+    P_CD(x) * (exp(beta_1 * x) - 1)
+  }
+  
+  # Perform numerical integration for the numerator using pracma::quad
+  numerator <- quad(integrand, from, to, tol = 1e-6)
+  
+  # Calculate the denominator
+  denominator <- numerator + 1
+  
+  # Calculate PAF
+  PAF <- round(numerator / denominator,2)
+  
+  # Print the result
+  print(paste("The Population Attributable Fraction (PAF) is:", PAF))
+  
+}
+
+calculate_PAF(clean_data, "volajohdia", 0.0179695)
