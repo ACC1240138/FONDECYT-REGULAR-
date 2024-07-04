@@ -579,70 +579,77 @@ total_volCH <- data %>%
   filter(!is.na(volCH)) %>% 
   summarise(pop = sum(exp),
             pc_totalvolCH = sum(volCH*exp)/pop) 
+
 round((7.8*0.789)*1000,2)
 conversion <- function(x,vol){
-  oms=round((x*0.789)*1000,2)
+  vol_oms = x*0.8
+  oms=round((vol_oms*0.789)*1000,2)
   round(oms/vol,2)
 }
 
 conversion(7.8,total_volCH[1,3])
-# 6.9
+# 5.52
 
 # 2010 = 7.8
 conversion(7.8,total_volCH[2,3])
-# 6.64
+# 5.31
 
 # 2012 = 7.9
 conversion(7.9,total_volCH[3,3])
-# 6.83
+# 5.47
 
 # 2014 = 8.0
 conversion(8.0,total_volCH[4,3])
-# 7.02
+# 5.62
 
 # 2016 = 7.0
 conversion(7.0,total_volCH[5,3])
-# 5.5
+# 4.4
 
 # 2018 = 6.7
 conversion(6.7,total_volCH[6,3])
-# 3.02
+# 2.41
 
 # 2020 = 7.6
 conversion(7.6,total_volCH[7,3])
-# 6.15
+# 4.92
 
 # 2022 = 7.6 (repetido)
 conversion(7.6,total_volCH[8,3])
-# 7.11
+# 5.69
 data <- data %>% 
-mutate(volaj = case_when(year == 2008 ~ volCH*6.9,
-                         year == 2010 ~ volCH*6.64,
-                         year == 2012 ~ volCH*6.83,
-                         year == 2014 ~ volCH*7.02,
-                         year == 2016 ~ volCH*5.5,
-                         year == 2018 ~ volCH*3.02,
-                         year == 2020 ~ volCH*6.15,
-                         year == 2022 ~ volCH*7.11),
+mutate(volaj = case_when(year == 2008 ~ volCH*5.52,
+                         year == 2010 ~ volCH*5.31,
+                         year == 2012 ~ volCH*5.47,
+                         year == 2014 ~ volCH*5.62,
+                         year == 2016 ~ volCH*4.4,
+                         year == 2018 ~ volCH*2.41,
+                         year == 2020 ~ volCH*4.92,
+                         year == 2022 ~ volCH*5.69),
        volajohdia = volaj/365,
        cvolaj = case_when(
   sexo == "Mujer" & volajohdia == 0 ~ 0,
   sexo == "Mujer" & volajohdia > 0 & volajohdia <= 19.99 ~ 1,
   sexo == "Mujer" & volajohdia >= 20 & volajohdia <= 39.99 ~ 2,
-  sexo == "Mujer" & volajohdia >= 40 & volajohdia <= 1000 ~ 3,
+  sexo == "Mujer" & volajohdia >= 40 & volajohdia <= 100 ~ 3,
+  sexo == "Mujer" & volajohdia > 100 ~ 4,
   sexo == "Hombre" & volajohdia == 0 ~ 0,
   sexo == "Hombre" & volajohdia > 0 & volajohdia <= 39.99 ~ 1,
   sexo == "Hombre" & volajohdia >= 40 & volajohdia <= 59.99 ~ 2,
-  sexo == "Hombre" & volajohdia >= 60 & volajohdia <= 1000 ~ 3,
+  sexo == "Hombre" & volajohdia >= 60 & volajohdia <= 100 ~ 3,
+  sexo == "Hombre" & volajohdia > 100 ~ 4,
   TRUE ~ NA_real_),
-cvolaj = factor(cvolaj, levels = 0:3, 
-                labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3"))) 
+cvolaj = factor(cvolaj, levels = 0:4, 
+                labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3", "Categoría 4"))) 
+data <- data %>% 
+  mutate(volajohdia = ifelse(volajohdia>150, 150, volajohdia))
+summary(data$volajohdia)
+  table(data$cvolaj) %>% prop.table()
 
-total_volajCH <- data %>% 
-  group_by(year) %>% 
-  filter(!is.na(volaj)) %>% 
-  summarise(pop = sum(exp),
-            pc_totalvolCH = sum(volaj*exp)/pop) 
+
+library(ggplot2)
+ggplot(data, aes(x = volajohdia)) + 
+  geom_density()
 # CALCULO DE FACTOR POR AÑO
 # REVISAR LA OMS, EL CONSUMO PC EN LITROS SE MULTIPLICA POR 
 # LA DENSIDAD DE ALCOHOL, PARA TRANSFORMAR A MASA
@@ -658,3 +665,59 @@ total_volajCH <- data %>%
 # crear la categoría 4 DE CONSUMO DE ALCOHOL.
 
 # AJUSTAR EL INGRESO SEGUN IPC
+
+# TEST IF VOLAJOHDIA SIGUE UNA GAMMA
+library(MASS)
+library(nortest)
+library(ggplot2)
+
+# Clean the data: remove missing or infinite values
+clean_data <- data %>%
+  filter(!is.na(volajohdia) & is.finite(volajohdia))
+
+install.packages("fitdistrplus")
+library(fitdistrplus)
+
+# Fit a Gamma Distribution
+mean_data <- mean(clean_data$volajohdia)
+var_data <- var(clean_data$volajohdia)
+shape_init <- mean_data^2 / var_data
+rate_init <- mean_data / var_data
+x <- rnorm(500,10,1)
+fitdistr(x, "gamma")
+volajohdia <- clean_data$volajohdia
+fit <- fitdist(volajohdia, "gamma")
+shape <- fit$estimate["shape"]
+rate <- fit$estimate["rate"]
+
+if (is.finite(shape_init) && is.finite(rate_init) && shape_init > 0 && rate_init > 0) {
+  # Fit the Gamma Distribution using fitdistrplus
+  fit <- tryCatch({
+    fitdist(volajohdia_data, "gamma", start = list(shape = shape_init, rate = rate_init))
+  }, error = function(e) {
+    stop("Error in fitting gamma distribution: ", e$message)
+  })
+# Display the fit parameters
+fit
+
+# Visual Inspection: Histogram and Q-Q plot
+ggplot(clean_data, aes(x = volajohdia)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "blue", alpha = 0.5) +
+  stat_function(fun = dgamma, args = list(shape = shape, rate = rate), col = "red", size = 1) +
+  labs(title = "Histogram of volajohdia with Gamma Density Curve", x = "volajohdia", y = "Density")
+
+# Q-Q plot
+qqplot(qgamma(ppoints(clean_data$volajohdia), shape = shape, rate = rate), clean_data$volajohdia,
+       main = "Q-Q Plot of volajohdia vs. Gamma Distribution",
+       xlab = "Theoretical Quantiles", ylab = "Sample Quantiles")
+abline(0, 1, col = "red")
+
+# Goodness-of-Fit Test: Kolmogorov-Smirnov Test
+ks_test <- ks.test(clean_data$volajohdia, "pgamma", shape = shape, rate = rate)
+
+# Optionally: Anderson-Darling Test
+ad_test <- ad.test(clean_data$volajohdia, pgamma, shape = shape, rate = rate)
+
+# Display results
+ks_test
+ad_test
