@@ -548,14 +548,16 @@ data <- enpg_full %>%
       sexo == "Mujer" & voltotdia == 0 ~ 0,
       sexo == "Mujer" & voltotdia > 0 & voltotdia <= 19.99 ~ 1, # REVISAR ESTO EN EL PROYECTO
       sexo == "Mujer" & voltotdia >= 20 & voltotdia <= 39.99 ~ 2,
-      sexo == "Mujer" & voltotdia >= 40 & voltotdia <= 1000 ~ 3,
+      sexo == "Mujer" & voltotdia >= 40 & voltotdia <= 100 ~ 3,
+      sexo == "Mujer" & voltotdia > 100 ~ 4,
       sexo == "Hombre" & voltotdia == 0 ~ 0,
       sexo == "Hombre" & voltotdia > 0 & voltotdia <= 39.99 ~ 1,
       sexo == "Hombre" & voltotdia >= 40 & voltotdia <= 59.99 ~ 2,
-      sexo == "Hombre" & voltotdia >= 60 & voltotdia <= 1000 ~ 3,
+      sexo == "Hombre" & voltotdia >= 60 & voltotdia <= 100 ~ 3,
+      sexo == "Hombre" & voltotMINSAL >100 ~ 4,
       TRUE ~ NA_real_),
-      catohaj = factor(catohaj, levels = 0:3, 
-                              labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3")),
+      catohaj = factor(catohaj, levels = 0:4, 
+                              labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3", "Categoría 4")),
       catohMS = case_when(
       sexo == "Mujer" & voltotMINSAL == 0 ~ 0,
       sexo == "Mujer" & voltotMINSAL > 0 & voltotMINSAL <= 19.99 ~ 1,
@@ -564,10 +566,11 @@ data <- enpg_full %>%
       sexo == "Hombre" & voltotMINSAL == 0 ~ 0,
       sexo == "Hombre" & voltotMINSAL > 0 & voltotMINSAL <= 39.99 ~ 1,
       sexo == "Hombre" & voltotMINSAL >= 40 & voltotMINSAL <= 59.99 ~ 2,
-      sexo == "Hombre" & voltotMINSAL >= 60 & voltotMINSAL <= 1000 ~ 3,
+      sexo == "Hombre" & voltotMINSAL >= 60 & voltotMINSAL <= 100 ~ 3,
+      sexo == "Hombre" & voltotMINSAL > 100 ~ 4,
       TRUE ~ NA_real_),
-      catohMS = factor(catohMS, levels = 0:3, 
-                       labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3")),
+      catohMS = factor(catohMS, levels = 0:4, 
+                       labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3", "Categoría 4")),
     volCH = (voltotdia*365),
     volCHMS = (voltotMINSAL*365)) %>% 
   filter(oh3 <=30)
@@ -581,7 +584,6 @@ total_volCH <- data %>%
   summarise(pop = sum(exp),
             pc_totalvolCH = sum(volCH*exp)/pop) 
 
-round((7.8*0.789)*1000,2)
 conversion <- function(x,vol){
   vol_oms = x*0.8
   oms=round((vol_oms*0.789)*1000,2)
@@ -643,11 +645,7 @@ mutate(volaj = case_when(year == 2008 ~ volCH*5.52,
 cvolaj = factor(cvolaj, levels = 0:4, 
                 labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3", "Categoría 4"))) 
 
-
-
-library(ggplot2)
-ggplot(data, aes(x = volajohdia)) + 
-  geom_density()
+write_rds(data, "ENPG_FULL.rds")
 # CALCULO DE FACTOR POR AÑO
 # REVISAR LA OMS, EL CONSUMO PC EN LITROS SE MULTIPLICA POR 
 # LA DENSIDAD DE ALCOHOL, PARA TRANSFORMAR A MASA
@@ -665,217 +663,4 @@ ggplot(data, aes(x = volajohdia)) +
 # AJUSTAR EL INGRESO SEGUN IPC
 
 
-# THEORETICAL DISTRIBUTION ESTIMATION
-# The proportion of most diseases caused by alcohol in
-# the component cause model in a population is determined by:
-#  • The distribution of the volume of exposure
-#  • The relative risk associated with each level of exposure
-library(fitdistrplus)
-cd_collapsed <- data %>% 
-  filter(volajohdia > 0) %>% 
-  mutate(volajohdia = ifelse(volajohdia > 150, 150, volajohdia)) %>% 
-  pull(volajohdia)
 
-cd_filter <- data %>% 
-  filter(volajohdia > 0 & volajohdia <= 150) %>% 
-  pull(volajohdia)
-
-# Fit log-normal distribution
-fit_lognorm_col <- fitdist(cd_collapsed, "lnorm")
-fit_lognorm_fil <- fitdist(cd_filter, "lnorm")
-
-# Fit gamma distribution
-fit_gamma_col <- fitdist(cd_collapsed, "gamma")
-fit_gamma_fil <- fitdist(cd_filter, "gamma")
-
-# Fit Weibull distribution
-fit_weibull_col <- fitdist(cd_collapsed, "weibull")
-fit_weibull_fil <- fitdist(cd_filter, "weibull")
-
-library(ggplot2)
-library(gridExtra)
-
-# Q-Q Plot for Log-Normal Distribution
-create_qqcomp_ggplot <- function(fit_list, title) {
-  ggplot_fit <- qqcomp(fit_list, plotstyle = "ggplot")
-  ggplot_fit + 
-    ggtitle(title) +
-    theme(
-      plot.title = element_text(size = 16, face = "bold"),
-      axis.title = element_text(size = 14),
-      axis.text = element_text(size = 12),
-      legend.title = element_text(size = 14),
-      legend.text = element_text(size = 12)
-    ) +
-    labs(color = "Distribution")+
-    coord_cartesian(xlim = c(0, 150))
-}
-
-# Generate Q-Q plots for collapsed data
-qqplot_collapsed <- create_qqcomp_ggplot(list(fit_lognorm_col, fit_gamma_col, fit_weibull_col), "Q-Q Plot Comparison for Collapsed Data")
-
-# Generate Q-Q plots for filtered data
-qqplot_filtered <- create_qqcomp_ggplot(list(fit_lognorm_fil, fit_gamma_fil, fit_weibull_fil), "Q-Q Plot Comparison for Filtered Data")
-
-# Combine plots in a grid
-grid.arrange(qqplot_collapsed, qqplot_filtered, nrow = 2)
-
-
-integrate_trapezoidal <- function(f, a, b, n = 1000) {
-  x <- seq(a, b, length.out = n + 1)
-  y <- f(x)
-  h <- (b - a) / n
-  sum(y[-1] + y[-length(y)]) * h / 2
-}
-
-# Define the density functions for each fitted distribution
-dens_lognorm <- function(x) dlnorm(x, meanlog = fit_lognorm$estimate["meanlog"], sdlog = fit_lognorm$estimate["sdlog"])
-dens_gamma <- function(x) dgamma(x, shape = fit_gamma$estimate["shape"], rate = fit_gamma$estimate["rate"])
-dens_weibull <- function(x) dweibull(x, shape = fit_weibull$estimate["shape"], scale = fit_weibull$estimate["scale"])
-# Define function to calculate chi-square statistic
-chi_square_test <- function(empirical, theoretical, bins) {
-  observed <- hist(empirical, breaks = bins, plot = FALSE)$counts
-  expected <- hist(theoretical, breaks = bins, plot = FALSE)$counts
-  chisq <- sum((observed - expected)^2 / expected)
-  return(chisq)
-}
-
-# Generate theoretical data based on fitted distributions
-set.seed(123)
-theoretical_lognorm <- rlnorm(1000, meanlog = fit_lognorm$estimate["meanlog"], sdlog = fit_lognorm$estimate["sdlog"])
-theoretical_gamma <- rgamma(1000, shape = fit_gamma$estimate["shape"], rate = fit_gamma$estimate["rate"])
-theoretical_weibull <- rweibull(1000, shape = fit_weibull$estimate["shape"], scale = fit_weibull$estimate["scale"])
-
-# Define bins for histogram (bandwidth of 10 grams)
-bins <- seq(0, 150, by = 10)
-
-# Perform chi-square tests
-chisq_lognorm <- chi_square_test(currentdrink, theoretical_lognorm, bins)
-chisq_gamma <- chi_square_test(currentdrink, theoretical_gamma, bins)
-chisq_weibull <- chi_square_test(currentdrink, theoretical_weibull, bins)
-
-# Display chi-square statistics
-chisq_results <- data.frame(
-  Distribution = c("Log-Normal", "Gamma", "Weibull"),
-  Chi_Square = c(chisq_lognorm, chisq_gamma, chisq_weibull)
-)
-
-
-
-# TEST IF VOLAJOHDIA SIGUE UNA GAMMA
-library(MASS)
-library(nortest)
-library(ggplot2)
-
-# Clean the data: remove missing or infinite values
-clean_data <- data %>%
-  filter(!is.na(volajohdia) & is.finite(volajohdia)) %>% 
-  filter(volajohdia > 0)
-
-
-install.packages("fitdistrplus")
-library(pracma)
-
-log_volajohdia <- log(clean_data$volajohdia)
-gamma_fit <- fitdist(log_volajohdia, "gamma")
-shape <- gamma_fit$estimate["shape"]
-rate <- gamma_fit$estimate["rate"]
-
-
-qqplot(qgamma(ppoints(log_volajohdia), shape = shape, rate = rate), log_volajohdia,
-       main = "Q-Q Plot of volajohdia vs. Theoretical Gamma Distribution",
-       xlab = "Theoretical Quantiles", ylab = "Sample Quantiles")
-abline(0, 1, col = "red")
-
-
-
-# Fit a Gamma Distribution
-mean_data <- mean(clean_data$volajohdia)
-var_data <- var(clean_data$volajohdia)
-shape_init <- mean_data^2 / var_data
-rate_init <- mean_data / var_data
-simulated_data <- rgamma(n = length(clean_data$volajohdia), shape = shape_init, rate = rate_init)
-
-# Plot the histogram of the sample data and overlay the density of the simulated data
-ggplot2::ggplot(clean_data, aes(x = volajohdia)) +
-  geom_histogram(aes(y = ..density..), bins = 30, fill = "blue", alpha = 0.5) +
-  geom_density(aes(y = ..density..), col = "red") +
-  stat_function(fun = dgamma, args = list(shape = shape_init, rate = rate_init), col = "green", size = 1) +
-  labs(title = "Histogram of volajohdia with Simulated Gamma Density Curve", x = "volajohdia", y = "Density")
-#Q-Q plot
-volajohdia_data <- clean_data$volajohdia
-qqplot(qgamma(ppoints(volajohdia_data), shape = shape_init, rate = rate_init), volajohdia_data,
-       main = "Q-Q Plot of volajohdia vs. Theoretical Gamma Distribution",
-       xlab = "Theoretical Quantiles", ylab = "Sample Quantiles")
-abline(0, 1, col = "red")
-
-# Goodness-of-Fit Test: Kolmogorov-Smirnov Test
-ks_test <- ks.test(volajohdia_data, "pgamma", shape = shape_init, rate = rate_init)
-print(ks_test)
-# Optionally: Anderson-Darling Test
-ad_test <- ad.test(volajohdia_data, pgamma, shape = shape_init, rate = rate_init)
-
-# LOG TRANSFORMATION
-log_volajohdia_data <- log(volajohdia_data[volajohdia_data > 0])  # Apply log transformation
-
-# Fit the Gamma Distribution using fitdistrplus
-fit_log <- fitdist(log_volajohdia_data, "gamma")
-shape_log <- fit_log$estimate["shape"]
-rate_log <- fit_log$estimate["rate"]
-
-print(fit_log)
-
-# Visual Inspection: Histogram and Theoretical Gamma Density Curve for transformed data
-ggplot(data.frame(log_volajohdia = log_volajohdia_data), aes(x = log_volajohdia)) +
-  geom_histogram(aes(y = ..density..), bins = 30, fill = "blue", alpha = 0.5) +
-  stat_function(fun = dgamma, args = list(shape = shape_log, rate = rate_log), col = "green", size = 1) +
-  labs(title = "Histogram of Log-transformed volajohdia with Theoretical Gamma Density Curve", x = "log(volajohdia)", y = "Density")
-
-# Q-Q plot for transformed data
-qqplot(qgamma(ppoints(log_volajohdia_data), shape = shape_log, rate = rate_log), log_volajohdia_data,
-       main = "Q-Q Plot of Log-transformed volajohdia vs. Theoretical Gamma Distribution",
-       xlab = "Theoretical Quantiles", ylab = "Sample Quantiles")
-abline(0, 1, col = "red")
-
-# Goodness-of-Fit Test: Kolmogorov-Smirnov Test for transformed data
-ks_test_log <- ks.test(log_volajohdia_data, "pgamma", shape = shape_log, rate = rate_log)
-
-# Optionally: Anderson-Darling Test for transformed data
-ad_test_log <- ad.test(log_volajohdia_data, pgamma, shape = shape_log, rate = rate_log)
-
-# Display results
-print(ks_test_log)
-print(ad_test_log)
-
-
-# RELATIVE RISK OF TUBERCULOSIS
-
-calculate_PAF <- function(data, alcohol_col, beta_1, from = 0, to = 150) {
-  # Calculate RR for each individual in the dataset
-  data <- data %>%
-    mutate(RR_CD = exp(beta_1 * !!sym(alcohol_col)))
-  
-  # Estimate the prevalence function P_CD(x)
-  density_est <- density(data[[alcohol_col]], from = from, to = to, n = 1000)
-  P_CD <- approxfun(density_est$x, density_est$y, rule = 2)  # Rule 2 for extrapolation
-  
-  # Define the integrand function for the numerator and denominator
-  integrand <- function(x) {
-    P_CD(x) * (exp(beta_1 * x) - 1)
-  }
-  
-  # Perform numerical integration for the numerator using pracma::quad
-  numerator <- quad(integrand, from, to, tol = 1e-6)
-  
-  # Calculate the denominator
-  denominator <- numerator + 1
-  
-  # Calculate PAF
-  PAF <- round(numerator / denominator,2)
-  
-  # Print the result
-  print(paste("The Population Attributable Fraction (PAF) is:", PAF))
-  
-}
-
-calculate_PAF(clean_data, "volajohdia", 0.0179695)
