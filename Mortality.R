@@ -1,9 +1,14 @@
 #########################
 # MORTALITY PREPARATION #
 #########################
-library(readr)
-library(dplyr)
-library(stringr)
+required_packages <- c("dplyr", "readr", "stringr", 
+                       "ggplot2")
+
+# Install and load required packages
+sapply(required_packages, function(pkg) {
+  if (!requireNamespace(pkg, quietly = TRUE)) install.packages(pkg)
+  library(pkg, character.only = TRUE)
+})
 m1 <- read_rds("https://github.com/ACC1240138/FONDECYT-REGULAR-/raw/main/rawdata/defunciones1.RDS") 
 m2 <- read_rds("https://github.com/ACC1240138/FONDECYT-REGULAR-/raw/main/rawdata/defunciones2.RDS") 
 
