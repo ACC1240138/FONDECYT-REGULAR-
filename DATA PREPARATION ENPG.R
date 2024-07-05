@@ -642,10 +642,7 @@ mutate(volaj = case_when(year == 2008 ~ volCH*5.52,
   TRUE ~ NA_real_),
 cvolaj = factor(cvolaj, levels = 0:4, 
                 labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3", "Categoría 4"))) 
-data <- data %>% 
-  mutate(volajohdia = ifelse(volajohdia>150, 150, volajohdia))
-summary(data$volajohdia)
-  table(data$cvolaj) %>% prop.table()
+
 
 
 library(ggplot2)
@@ -667,6 +664,104 @@ ggplot(data, aes(x = volajohdia)) +
 
 # AJUSTAR EL INGRESO SEGUN IPC
 
+
+# THEORETICAL DISTRIBUTION ESTIMATION
+# The proportion of most diseases caused by alcohol in
+# the component cause model in a population is determined by:
+#  • The distribution of the volume of exposure
+#  • The relative risk associated with each level of exposure
+library(fitdistrplus)
+cd_collapsed <- data %>% 
+  filter(volajohdia > 0) %>% 
+  mutate(volajohdia = ifelse(volajohdia > 150, 150, volajohdia)) %>% 
+  pull(volajohdia)
+
+cd_filter <- data %>% 
+  filter(volajohdia > 0 & volajohdia <= 150) %>% 
+  pull(volajohdia)
+
+# Fit log-normal distribution
+fit_lognorm_col <- fitdist(cd_collapsed, "lnorm")
+fit_lognorm_fil <- fitdist(cd_filter, "lnorm")
+
+# Fit gamma distribution
+fit_gamma_col <- fitdist(cd_collapsed, "gamma")
+fit_gamma_fil <- fitdist(cd_filter, "gamma")
+
+# Fit Weibull distribution
+fit_weibull_col <- fitdist(cd_collapsed, "weibull")
+fit_weibull_fil <- fitdist(cd_filter, "weibull")
+
+library(ggplot2)
+library(gridExtra)
+
+# Q-Q Plot for Log-Normal Distribution
+create_qqcomp_ggplot <- function(fit_list, title) {
+  ggplot_fit <- qqcomp(fit_list, plotstyle = "ggplot")
+  ggplot_fit + 
+    ggtitle(title) +
+    theme(
+      plot.title = element_text(size = 16, face = "bold"),
+      axis.title = element_text(size = 14),
+      axis.text = element_text(size = 12),
+      legend.title = element_text(size = 14),
+      legend.text = element_text(size = 12)
+    ) +
+    labs(color = "Distribution")+
+    coord_cartesian(xlim = c(0, 150))
+}
+
+# Generate Q-Q plots for collapsed data
+qqplot_collapsed <- create_qqcomp_ggplot(list(fit_lognorm_col, fit_gamma_col, fit_weibull_col), "Q-Q Plot Comparison for Collapsed Data")
+
+# Generate Q-Q plots for filtered data
+qqplot_filtered <- create_qqcomp_ggplot(list(fit_lognorm_fil, fit_gamma_fil, fit_weibull_fil), "Q-Q Plot Comparison for Filtered Data")
+
+# Combine plots in a grid
+grid.arrange(qqplot_collapsed, qqplot_filtered, nrow = 2)
+
+
+integrate_trapezoidal <- function(f, a, b, n = 1000) {
+  x <- seq(a, b, length.out = n + 1)
+  y <- f(x)
+  h <- (b - a) / n
+  sum(y[-1] + y[-length(y)]) * h / 2
+}
+
+# Define the density functions for each fitted distribution
+dens_lognorm <- function(x) dlnorm(x, meanlog = fit_lognorm$estimate["meanlog"], sdlog = fit_lognorm$estimate["sdlog"])
+dens_gamma <- function(x) dgamma(x, shape = fit_gamma$estimate["shape"], rate = fit_gamma$estimate["rate"])
+dens_weibull <- function(x) dweibull(x, shape = fit_weibull$estimate["shape"], scale = fit_weibull$estimate["scale"])
+# Define function to calculate chi-square statistic
+chi_square_test <- function(empirical, theoretical, bins) {
+  observed <- hist(empirical, breaks = bins, plot = FALSE)$counts
+  expected <- hist(theoretical, breaks = bins, plot = FALSE)$counts
+  chisq <- sum((observed - expected)^2 / expected)
+  return(chisq)
+}
+
+# Generate theoretical data based on fitted distributions
+set.seed(123)
+theoretical_lognorm <- rlnorm(1000, meanlog = fit_lognorm$estimate["meanlog"], sdlog = fit_lognorm$estimate["sdlog"])
+theoretical_gamma <- rgamma(1000, shape = fit_gamma$estimate["shape"], rate = fit_gamma$estimate["rate"])
+theoretical_weibull <- rweibull(1000, shape = fit_weibull$estimate["shape"], scale = fit_weibull$estimate["scale"])
+
+# Define bins for histogram (bandwidth of 10 grams)
+bins <- seq(0, 150, by = 10)
+
+# Perform chi-square tests
+chisq_lognorm <- chi_square_test(currentdrink, theoretical_lognorm, bins)
+chisq_gamma <- chi_square_test(currentdrink, theoretical_gamma, bins)
+chisq_weibull <- chi_square_test(currentdrink, theoretical_weibull, bins)
+
+# Display chi-square statistics
+chisq_results <- data.frame(
+  Distribution = c("Log-Normal", "Gamma", "Weibull"),
+  Chi_Square = c(chisq_lognorm, chisq_gamma, chisq_weibull)
+)
+
+
+
 # TEST IF VOLAJOHDIA SIGUE UNA GAMMA
 library(MASS)
 library(nortest)
@@ -679,7 +774,6 @@ clean_data <- data %>%
 
 
 install.packages("fitdistrplus")
-library(fitdistrplus)
 library(pracma)
 
 log_volajohdia <- log(clean_data$volajohdia)
