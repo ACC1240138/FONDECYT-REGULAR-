@@ -520,6 +520,7 @@ gc()
 library(dplyr)
 library(readr)
 library(haven)
+
 enpg_full <- readRDS("enpg_full.RDS")
 data <- enpg_full %>% 
   filter(edad >=15) %>% 
@@ -536,7 +537,7 @@ data <- enpg_full %>%
                                 audit3 == "mensualmente" ~ 1,
                                 audit3 == "semanalmente" ~ 4,
                                 audit3 == "todos o casi todos los dias" ~ 20),
-         diasalchab = oh3-dias_binge,
+         diasalchab = ifelse(prom_tragos < 7.5, (oh3-dias_binge),oh3),
          diasalchab = ifelse(diasalchab < 0, 0, diasalchab), # PREGUNTAR/ REVISRA AÑO DE ESTO
          volalchab = diasalchab*prom_tragos,
         volbinge = dias_binge*6, # PREGUNTAR POR QUÉ X6?
@@ -575,6 +576,10 @@ data <- enpg_full %>%
     volCHMS = (voltotMINSAL*365)) %>% 
   filter(oh3 <=30)
 
+n_2018 = data %>% 
+  filter(year == 2008)
+summary(data$edad)
+
 rm(enpg_full)
 # CONSUMO PC OMS
 # 2008 = 7.8
@@ -585,25 +590,25 @@ total_volCH <- data %>%
             pc_totalvolCH = sum(volCH*exp)/pop) 
 
 conversion <- function(x,vol){
-  vol_oms = x*0.8
+  vol_oms = x*0.9
   oms=round((vol_oms*0.789)*1000,2)
   round(oms/vol,2)
 }
 
 conversion(7.8,total_volCH[1,3])
-# 5.52
+# 6.21
 
 # 2010 = 7.8
 conversion(7.8,total_volCH[2,3])
-# 5.31
+# 5.97
 
 # 2012 = 7.9
 conversion(7.9,total_volCH[3,3])
-# 5.47
+# 6.15
 
 # 2014 = 8.0
 conversion(8.0,total_volCH[4,3])
-# 5.62
+# 6.32
 
 # 2016 = 7.0
 conversion(7.0,total_volCH[5,3])
