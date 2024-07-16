@@ -582,8 +582,8 @@ n_2018 = data %>%
 summary(data$edad)
 
 rm(enpg_full)
-# CONSUMO PC OMS
-# 2008 = 7.8
+
+# APC OMS
 total_volCH <- data %>% 
   group_by(year) %>% 
   filter(!is.na(volCH)) %>% 
@@ -596,6 +596,8 @@ conversion <- function(x,vol){
   round(oms/vol,2)
 }
 
+# 2008 = 7.8
+
 conversion(7.8,total_volCH[1,3])
 # 5.53
 
@@ -603,38 +605,39 @@ conversion(7.8,total_volCH[1,3])
 conversion(7.8,total_volCH[2,3])
 # 5.31
 
-# 2012 = 7.9
-conversion(7.9,total_volCH[3,3])
-# 5.47
+# 2012 = 7.8
+conversion(7.8,total_volCH[3,3])
+# 5.4
 
-# 2014 = 8.0
-conversion(8.0,total_volCH[4,3])
-# 5.62
+# 2014 = 7.8
+conversion(7.8,total_volCH[4,3])
+# 5.48
 
-# 2016 = 7.0
-conversion(7.0,total_volCH[5,3])
-# 4.4
+# 2016 = 6.7
+conversion(6.7,total_volCH[5,3])
+# 4.21
 
 # 2018 = 6.7
 conversion(6.7,total_volCH[6,3])
 # 2.41
 
-# 2020 = 7.6
-conversion(7.6,total_volCH[7,3])
-# 4.92
+# 2020 = 7.5
+conversion(7.5,total_volCH[7,3])
+# 4.86
 
-# 2022 = 7.6 (repetido)
-conversion(7.6,total_volCH[8,3])
-# 5.69
+# 2022 = 7.5 (repetido)
+conversion(7.5,total_volCH[8,3])
+# 5.62
+
 data <- data %>% 
-mutate(volaj = case_when(year == 2008 ~ volCH*5.52,
+mutate(volaj = case_when(year == 2008 ~ volCH*5.53,
                          year == 2010 ~ volCH*5.31,
-                         year == 2012 ~ volCH*5.47,
-                         year == 2014 ~ volCH*5.62,
-                         year == 2016 ~ volCH*4.4,
+                         year == 2012 ~ volCH*5.4,
+                         year == 2014 ~ volCH*5.48,
+                         year == 2016 ~ volCH*4.21,
                          year == 2018 ~ volCH*2.41,
-                         year == 2020 ~ volCH*4.92,
-                         year == 2022 ~ volCH*5.69),
+                         year == 2020 ~ volCH*4.86,
+                         year == 2022 ~ volCH*5.62),
        volajohdia = volaj/365,
        cvolaj = case_when(
   sexo == "Mujer" & volajohdia == 0 ~ 0,
@@ -652,6 +655,7 @@ cvolaj = factor(cvolaj, levels = 0:4,
                 labels = c("Abstinentes", "Categoría 1", "Categoría 2", "Categoría 3", "Categoría 4"))) 
 
 write_rds(data, "ENPG_FULL.rds")
+
 # CALCULO DE FACTOR POR AÑO
 # REVISAR LA OMS, EL CONSUMO PC EN LITROS SE MULTIPLICA POR 
 # LA DENSIDAD DE ALCOHOL, PARA TRANSFORMAR A MASA
