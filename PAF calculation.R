@@ -25,6 +25,10 @@ cd_collapsed <- data %>%
   mutate(volajohdia = ifelse(volajohdia > 150, 150, volajohdia)) %>% 
   pull(volajohdia)
 
+cd_vector <- data %>% 
+  filter(volajohdia > 0) %>% 
+  pull(volajohdia)
+
 # Fit log-normal distribution
 fit_lognorm_col <- fitdist(cd_collapsed, "lnorm")
 x_vals <- seq(0, 150, length.out = 1000)
@@ -84,68 +88,27 @@ create_qqcomp_ggplot <- function(fit_list, title) {
 # Generate Q-Q plots for collapsed data
 qqplot_collapsed <- create_qqcomp_ggplot(list(fit_lognorm_col, fit_gamma_col, fit_weibull_col), "Q-Q Plot Comparison for Collapsed Data")
 
-# PAF FOR TUBERCULOSIS
+# PROPORTION OF NON DRINKERS
 p_nd <- data %>% 
   mutate(non_drinkers = ifelse(oh1 == "No", 1, 0),
          former_drinkers = ifelse(oh2 == ">30" | oh2 == ">1 año", 1 , 0)) %>% 
   summarise(p_nd = mean(non_drinkers, na.rm = T)) %>% 
   pull(p_nd)
 
+# PROPORTION OF FORMER DRINKERS
 p_fd <- data %>% 
   mutate(non_drinkers = ifelse(oh1 == "No", 1, 0),
          former_drinkers = ifelse(oh1 == "Si" & (oh2 == ">30" | oh2 == ">1 año"), 1 , 0)) %>% 
   summarise(p_fd = mean(former_drinkers, na.rm = T)) %>% 
   pull(p_fd)
 
-# FUNCTION TO CALCULATE PAF USING CURRENT DRINKERS INFORMATION ONLY
-calculate_paf_cr <- function(beta_1, data, distribution) {
-
-  if (distribution == "lognorm") {
-    fit <- fitdist(data, "lnorm")
-    prevalence_function <- function(x) {
-      dlnorm(x, meanlog = fit$estimate["meanlog"], sdlog = fit$estimate["sdlog"])
-    }
-  } else if (distribution == "gamma") {
-    fit <- fitdist(data, "gamma")
-    prevalence_function <- function(x) {
-      dgamma(x, shape = fit$estimate["shape"], rate = fit$estimate["rate"])
-    }
-  } else if (distribution == "weibull") {
-    fit <- fitdist(data, "weibull")
-    prevalence_function <- function(x) {
-      dweibull(x, shape = fit$estimate["shape"], scale = fit$estimate["scale"])
-    }
-  } else {
-    stop("Unsupported distribution")
-  }
-  
-  rr_function <- function(x) {
-    exp(beta_1 * x)
-  }
-  
-  integrand <- function(x) {
-    prevalence_function(x) * (rr_function(x) - 1)
-  }
-  
-  numerator <- integrate(integrand, lower = 0, upper = 150)$value
-  denominator <- numerator + 1
-  
-  paf <- numerator / denominator
-  return(paf)
-}
-paf_tb_lognorm_cr <- calculate_paf_cr(beta_1, cd_collapsed, "lognorm")
-paf_tb_gamma_cr <- calculate_paf_cr(beta_1, cd_collapsed, "gamma")
-paf_tb_weibull_cr <- calculate_paf_cr(beta_1, cd_collapsed, "weibull")
-
-list(
-  lognorm = paf_tb_lognorm_cr,
-  gamma = paf_tb_gamma_cr,
-  weibull = paf_tb_weibull_cr
-)
 
 # FUNCTION TO CALCULATE PAF USING PROPORTION OF FORMER DRINKERS 
+# THIS FUNCTION APPLIES FOR ANY DISEASE WITH A RR GIVEN BY exp(B1*X)
+# TUBERCULOSIS, PANCREATITIS, COLON AND RECTUM CANCER, LIVER CANCER, 
+# BREAST CANCER
  
-calculate_paf_fd <- function(beta_1, var,data, distribution, p_fd, rr_fd) {
+calculate_paf_fd <- function(beta_1, data, distribution, p_fd, rr_fd) {
   
   if (distribution == "lognorm") {
     fit <- fitdist(data, "lnorm")
@@ -183,28 +146,128 @@ calculate_paf_fd <- function(beta_1, var,data, distribution, p_fd, rr_fd) {
 
 }
 
-set.seed(123)
-num_simulations <- 1000
-simulated_pafs <- numeric(num_simulations)
+# BETAS OF RELATIVE RISK
 
-for (i in 1:num_simulations) {
-  beta_sim <- rnorm(1, mean = beta_1, sd = sqrt(0.0072152**2))
-  simulated_pafs[i] <- calculate_paf_fd(beta_sim, var= 0.0072152**2, cd_collapsed, "lognorm", p_fd, 1)
-}
+# TUBERCULOSIS
+b_tb <- 0.0179695
+var_tb <- 0.0072152^2
 
-# Calculate 95% Uncertainty Intervals
-paf_mean <- mean(simulated_pafs)
-lower_ui <- quantile(simulated_pafs, 0.025)
-upper_ui <- quantile(simulated_pafs, 0.975)
+# HIV/AIDS (Male)
+b_hiv_male <- ln(1.54)
+# for consumption > 61 grams/day
+var_hiv_male <- 0.0782107722^2
 
-list(
-  mean_paf = paf_mean,
-  lower_ui = lower_ui,
-  upper_ui = upper_ui
-)
+# HIV/AIDS (Female)
+b_hiv_fem <- ln(1.54)
+# for consumption > 49 grams/day
+var_hiv_fem <- 0.0782107722^2
+
+# LOWER RESPORATORY INFECTIONS
+b_lri <- 0.4764038
+var_lri <- 0.19220552^2
+
+# LIP AND ORAL CAVITY CANCER
+b1_locan <- 0.02474
+b2_locan <- -0.00004
+# Variance-covariance matrix:
+# Variance (b1): 0.000002953
+# Variance (b2): 0.000000000102
+# Covariance: -0.0000000127
+
+# Other Pharyngeal Cancers
+b1_opcan <- 0.02474
+b2_opcan <- -0.00004
+# Variance-covariance matrix:
+# Variance (b1): 0.000002953
+# Variance (b2): 0.000000000102
+# Covariance: -0.0000000127
+
+# Oesophagus Cancer
+b1_oescan <- 0.0132063596418668
+b2_oescan <- -4.14801974664481*10^-08
+# Variance-covariance matrix:
+# Variance (b1): 1.525706*10^-07
+# Variance (b2): 0.000002953
+# Covariance: -6.885205*10^-13
+
+# Colon and Rectum Cancers (Male)
+b1_crcan_male <- 0.006279
+var_crcan <- 0.000000907
+rr_crcan_fd_male <- 2.19
+var_rr_crcan_fd_male <- 0.04651062
+
+# Colon and Rectum Cancers (Female)
+b1_crcan_fem <- 0.006279
+rr_crcan_fd_fem <- 1.05
+var_rr_crcan_fd_fem <- 0.1459680025873172
+
+# Liver Cancer (Male)
+b1_lican_male <- 0.005041
+var_lican <- 0.000003097
+rr_lican_fd_male <- 2.23
+var_rr_lican_fd_male <- 0.2590977572
+
+# Liver Cancer (Female)
+b1_lican_fem <- 0.005041
+rr_lican_fd_fem <- 2.68
+var_rr_lican_fd_fem <- 0.2725606092
+
+# Breast Cancer (Female)
+b1_bcan <- 0.01018
+var_bcan <- 0.0000007208
+rr_bcan_fd <- 1
+var_rr_bcan_fd <- 0
+
+# Larynx Cancer
+b1_lxcan <- 0.01462
+b2_lxcan <- -0.00002
+# Variance-covariance matrix:
+# Variance (b1): 0.000003585
+# Variance (b2): 0.000000000126
+# Covariance: -0.0000000162
+
+# Diabetes Mellitus (Male)
+b1_dm_male <- 0.1763703
+var_dm_male <- -0.0728256
+# Variance-covariance matrix:
+# Variance (b1): 0.16812525
+# Variance (b2): 0.29964479
+# Covariance: -0.2240129
+
+# Diabetes Mellitus (Female)
+b1_dm_fem <- -1.3133910
+b2_dm_fem <- 1.0142390
+# Variance-covariance matrix:
+# Variance (b1): 0.16812525
+# Variance (b2): 0.29964479
+# Covariance: -0.2240129
+
+# Epilepsy
+b1_epi <- 1.22861
+var_epi <- 0.13919742
+
+# Hypertensive Heart Disease (Male)
+b1_hhd_male <- 0.0150537
+b2_hhd_male <- -0.0156155
+# Variance-covariance matrix:
+# Variance (b1): 0.00241962
+# Variance (b2): 0.00416022
+# Covariance: -0.000009788
+
+# Hypertensive Heart Disease (Female)
+b1_hhd_fem <- -0.0154196
+b2_hhd_fem <- 0.0217586
+# Variance-covariance matrix:
+# Variance (b1): 0.0064592
+# Variance (b2): 0.00680182
+# Covariance: -0.00004194
+
+
+
+
 # Calculate the PAF for TB using different distributions
-paf_tb_lognorm_fd <- calculate_paf_fd(beta_1, var= 0.0072152**2,cd_collapsed,"lognorm", p_fd, 1)
-paf_tb_gamma_fd <- calculate_paf_fd(beta_1, var= 0.0072152**2, cd_collapsed, "gamma", p_fd, 1)
+paf_tb_lognorm_fd <- calculate_paf_fd(beta_1,cd_collapsed,"lognorm", p_fd, 1)
+paf_tb_gamma_fd <- calculate_paf_fd(beta_1, cd_collapsed, "gamma", p_fd, 1)
 paf_tb_weibull_fd <- calculate_paf_fd(beta_1, var= 0.0072152**2, cd_collapsed, "weibull", p_fd, 1)
 
 list(
@@ -215,27 +278,33 @@ list(
 
 # Calculate the PAF for pancreatitis using different distributions
 paf_pc_lognorm_nd <- calculate_paf_nd(0.0173451 , cd_collapsed, "lognorm")
-paf_pc_gamma_nd <- calculate_paf_nd(0.0173451 , cd_collapsed, "gamma")
+paf_pc_gamma_nd <- calculate_paf_fd(0.0173451 , cd_collapsed, "gamma", p_fd, 1)
 paf_pc_weibull_nd <- calculate_paf_nd(0.0173451 , cd_collapsed, "weibull")
 
-paf_pc_lognorm_cr <- calculate_paf_cr(0.0173451 , cd_collapsed, "lognorm")
-paf_pc_gamma_cr <- calculate_paf_cr(0.0173451 , cd_collapsed, "gamma")
-paf_pc_weibull_cr <- calculate_paf_cr(0.0173451 , cd_collapsed, "weibull")
+fit <- fitdist(cd_vector, "gamma")
+
+prevalence_function <- function(x) {
+  dgamma(x, shape = fit$estimate["shape"], rate = fit$estimate["rate"])
+}
+rr_function <- function(x) {
+  exp(beta_1 * x)
+}
+integrand <- function(x) {
+  prevalence_function(x) * (rr_function(x) - 1)
+}
+integrate(integrand, 0, 150)$value
 
 
 
+shape <- fit$estimate[["shape"]]
+rate <- fit$estimate[["rate"]]
+scale <- 1 / rate
+gamma_mean <- shape * scale
+gamma_variance <- shape * (scale^2)
+gamma_sd <- sqrt(gamma_variance)
+mean(cd_vector)
 
-
-
-
-
-
-
-
-
-
-
-
+sd(cd_vector)
 
 
 

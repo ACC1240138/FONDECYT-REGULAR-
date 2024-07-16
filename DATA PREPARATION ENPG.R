@@ -537,17 +537,18 @@ data <- enpg_full %>%
                                 audit3 == "mensualmente" ~ 1,
                                 audit3 == "semanalmente" ~ 4,
                                 audit3 == "todos o casi todos los dias" ~ 20),
-         diasalchab = ifelse(prom_tragos < 7.5, (oh3-dias_binge),oh3),
-         diasalchab = ifelse(diasalchab < 0, 0, diasalchab), # PREGUNTAR/ REVISRA AÑO DE ESTO
+    dias_binge = ifelse(prom_tragos > 5.5, 0, dias_binge),
+         diasalchab = oh3-dias_binge,
+         diasalchab = ifelse(diasalchab < 0, 0, diasalchab), 
          volalchab = diasalchab*prom_tragos,
-        volbinge = dias_binge*6, # PREGUNTAR POR QUÉ X6?
+        volbinge = dias_binge*6, 
     voltotal = (volbinge + volalchab) * 13,
     voltotMS = (volbinge + volalchab) * 16,
     voltotdia = voltotal/30,
     voltotMINSAL = voltotMS/30,
     catohaj = case_when(
       sexo == "Mujer" & voltotdia == 0 ~ 0,
-      sexo == "Mujer" & voltotdia > 0 & voltotdia <= 19.99 ~ 1, # REVISAR ESTO EN EL PROYECTO
+      sexo == "Mujer" & voltotdia > 0 & voltotdia <= 19.99 ~ 1, 
       sexo == "Mujer" & voltotdia >= 20 & voltotdia <= 39.99 ~ 2,
       sexo == "Mujer" & voltotdia >= 40 & voltotdia <= 100 ~ 3,
       sexo == "Mujer" & voltotdia > 100 ~ 4,
@@ -590,25 +591,25 @@ total_volCH <- data %>%
             pc_totalvolCH = sum(volCH*exp)/pop) 
 
 conversion <- function(x,vol){
-  vol_oms = x*0.9
+  vol_oms = x*0.8
   oms=round((vol_oms*0.789)*1000,2)
   round(oms/vol,2)
 }
 
 conversion(7.8,total_volCH[1,3])
-# 6.21
+# 5.53
 
 # 2010 = 7.8
 conversion(7.8,total_volCH[2,3])
-# 5.97
+# 5.31
 
 # 2012 = 7.9
 conversion(7.9,total_volCH[3,3])
-# 6.15
+# 5.47
 
 # 2014 = 8.0
 conversion(8.0,total_volCH[4,3])
-# 6.32
+# 5.62
 
 # 2016 = 7.0
 conversion(7.0,total_volCH[5,3])
