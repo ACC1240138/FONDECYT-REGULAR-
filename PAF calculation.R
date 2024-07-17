@@ -284,14 +284,24 @@ p_fd <- data %>%
          former_drinkers = ifelse(oh1 == "Si" & (oh2 == ">30" | oh2 == ">1 año"), 1 , 0)) %>% 
   summarise(p_fd = mean(former_drinkers, na.rm = T)) %>% 
   pull(p_fd)
+
 #FD FEM
+cd_fem <- data %>% 
+  filter(sexo == "Mujer", volajohdia > 0) %>% 
+  mutate(volajohdia = ifelse(volajohdia > 150, 150, volajohdia)) %>% 
+  pull(volajohdia)
 p_fd_fem <- data %>% 
   filter(sexo == "Mujer") %>% 
   mutate(non_drinkers = ifelse(oh1 == "No", 1, 0),
          former_drinkers = ifelse(oh1 == "Si" & (oh2 == ">30" | oh2 == ">1 año"), 1 , 0)) %>% 
   summarise(p_fd = mean(former_drinkers, na.rm = T)) %>% 
   pull(p_fd)
+
 #FD MALE
+cd_male <- data %>% 
+  filter(sexo == "Hombre", volajohdia > 0) %>% 
+  mutate(volajohdia = ifelse(volajohdia > 150, 150, volajohdia)) %>% 
+  pull(volajohdia)
 p_fd_male <- data %>% 
   filter(sexo == "Hombre") %>% 
   mutate(non_drinkers = ifelse(oh1 == "No", 1, 0),
@@ -299,11 +309,10 @@ p_fd_male <- data %>%
   summarise(p_fd = mean(former_drinkers, na.rm = T)) %>% 
   pull(p_fd)
 
-# PAF TUBERCULOSIS BOTH SEXES
-# Calculate the PAF for TB using different distributions
-paf_tb_lognorm_fd <- calculate_paf_fd(b_tb,cd_collapsed,"lognorm", p_fd, 1)
-paf_tb_gamma_fd <- calculate_paf_fd(b_tb, cd_collapsed, "gamma", p_fd, 1)
-paf_tb_weibull_fd <- calculate_paf_fd(b_tb, cd_collapsed, "weibull", p_fd, 1)
+# PAF TUBERCULOSIS MALES
+paf_tb_lognorm_fd <- calculate_paf_fd(b_tb,cd_male,"lognorm", p_fd_male, 1)
+paf_tb_gamma_fd <- calculate_paf_fd(b_tb, cd_male, "gamma", p_fd_male, 1)
+paf_tb_weibull_fd <- calculate_paf_fd(b_tb, cd_male, "weibull", p_fd_male, 1)
 
 list(
   lognorm = paf_tb_lognorm_fd,
@@ -311,26 +320,33 @@ list(
   weibull = paf_tb_weibull_fd
 )
 
-# PAF PANCREATITIS MALES
-cd_collapsed_male <- data %>% 
-  filter(volajohdia > 0, sexo == "Hombre") %>% 
-  mutate(volajohdia = ifelse(volajohdia > 150, 150, volajohdia)) %>% 
-  pull(volajohdia) 
-  
-paf_pc_lognorm_nd <- calculate_paf_fd(b1_panc , cd_collapsed_male, "lognorm", p_fd_male, 2.2)
-paf_pc_gamma_nd <- calculate_paf_fd(b1_panc , cd_collapsed_male, "gamma", p_fd_male, 2.2)
-paf_pc_weibull_nd <- calculate_paf_fd(b1_panc , cd_collapsed_male, "weibull", p_fd_male, 2.2)
+# PAF TUBERCULOSIS FEM
+paf_tb_lognorm_fem <- calculate_paf_fd(b_tb,cd_fem,"lognorm", p_fd_fem, 1)
+paf_tb_gamma_fem <- calculate_paf_fd(b_tb, cd_fem, "gamma", p_fd_fem, 1)
+paf_tb_weibull_fem <- calculate_paf_fd(b_tb, cd_fem, "weibull", p_fd_fem, 1)
 
 list(
-  lognorm = paf_pc_lognorm_nd,
-  gamma = paf_pc_gamma_nd,
-  weibull = paf_pc_weibull_nd
+  lognorm = paf_tb_lognorm_fem,
+  gamma = paf_tb_gamma_fem,
+  weibull = paf_tb_weibull_fem
+)
+
+# PAF PANCREATITIS MALES
+  
+paf_pc_lognorm_male <- calculate_paf_fd(b1_panc , cd_male, "lognorm", p_fd_male, 2.2)
+paf_pc_gamma_male <- calculate_paf_fd(b1_panc , cd_male, "gamma", p_fd_male, 2.2)
+paf_pc_weibull_male <- calculate_paf_fd(b1_panc , cd_male, "weibull", p_fd_male, 2.2)
+
+list(
+  lognorm = paf_pc_lognorm_male,
+  gamma = paf_pc_gamma_male,
+  weibull = paf_pc_weibull_male
 )
 
 # PAF COLON AND RECTUM CANCER MALE
-paf_crcan_lognorm_male <- calculate_paf_fd(b1_crcan_male , cd_collapsed_male, "lognorm", p_fd_male, rr_crcan_fd_male)
-paf_crcan_gamma_male <- calculate_paf_fd(b1_crcan_male , cd_collapsed_male, "gamma", p_fd_male, rr_crcan_fd_male)
-paf_crcan_weibull_male <- calculate_paf_fd(b1_crcan_male , cd_collapsed_male, "weibull", p_fd_male, rr_crcan_fd_male)
+paf_crcan_lognorm_male <- calculate_paf_fd(b1_crcan_male , cd_male, "lognorm", p_fd_male, rr_crcan_fd_male)
+paf_crcan_gamma_male <- calculate_paf_fd(b1_crcan_male , cd_male, "gamma", p_fd_male, rr_crcan_fd_male)
+paf_crcan_weibull_male <- calculate_paf_fd(b1_crcan_male , cd_male, "weibull", p_fd_male, rr_crcan_fd_male)
 
 list(
   lognorm = paf_crcan_lognorm_male,
@@ -339,14 +355,10 @@ list(
 )
 
 # PAF COLON AND RECTUM CANCER FEMALE
-cd_collapsed_fem <- data %>% 
-  filter(volajohdia > 0, sexo == "Mujer") %>% 
-  mutate(volajohdia = ifelse(volajohdia > 150, 150, volajohdia)) %>% 
-  pull(volajohdia) 
 
-paf_crcan_lognorm_fem <- calculate_paf_fd(b1_crcan_fem , cd_collapsed_fem, "lognorm", p_fd_fem, rr_crcan_fd_fem)
-paf_crcan_gamma_fem <- calculate_paf_fd(b1_crcan_fem , cd_collapsed_fem, "gamma", p_fd_fem, rr_crcan_fd_fem)
-paf_crcan_weibull_fem <- calculate_paf_fd(b1_crcan_fem , cd_collapsed_fem, "weibull", p_fd_fem, rr_crcan_fd_fem)
+paf_crcan_lognorm_fem <- calculate_paf_fd(b1_crcan_fem , cd_fem, "lognorm", p_fd_fem, rr_crcan_fd_fem)
+paf_crcan_gamma_fem <- calculate_paf_fd(b1_crcan_fem , cd_fem, "gamma", p_fd_fem, rr_crcan_fd_fem)
+paf_crcan_weibull_fem <- calculate_paf_fd(b1_crcan_fem , cd_fem, "weibull", p_fd_fem, rr_crcan_fd_fem)
 
 list(
   lognorm = paf_crcan_lognorm_fem,
@@ -354,10 +366,11 @@ list(
   weibull = paf_crcan_weibull_fem
 )
 
+calculate_paf_fd(b1_crcan)
 # PAF LIVER CANCER MALE
-paf_lican_lognorm_male <- calculate_paf_fd(b1_lican_male , cd_collapsed_male, "lognorm", p_fd_male, rr_lican_fd_male)
-paf_lican_gamma_male <- calculate_paf_fd(b1_lican_male , cd_collapsed_male, "gamma", p_fd_male, rr_lican_fd_male)
-paf_lican_weibull_male <- calculate_paf_fd(b1_lican_male , cd_collapsed_male, "weibull", p_fd_male, rr_lican_fd_male)
+paf_lican_lognorm_male <- calculate_paf_fd(b1_lican_male , cd_male, "lognorm", p_fd_male, rr_lican_fd_male)
+paf_lican_gamma_male <- calculate_paf_fd(b1_lican_male , cd_male, "gamma", p_fd_male, rr_lican_fd_male)
+paf_lican_weibull_male <- calculate_paf_fd(b1_lican_male , cd_male, "weibull", p_fd_male, rr_lican_fd_male)
 
 list(
   lognorm = paf_lican_lognorm_male,
@@ -366,9 +379,9 @@ list(
 )
 
 # PAF LIVER CANCER FEMALE
-paf_lican_lognorm_fem <- calculate_paf_fd(b1_lican_fem , cd_collapsed_fem, "lognorm", p_fd_fem, rr_lican_fd_fem)
-paf_lican_gamma_fem <- calculate_paf_fd(b1_lican_fem , cd_collapsed_fem, "gamma", p_fd_male, rr_lican_fd_fem)
-paf_lican_weibull_fem <- calculate_paf_fd(b1_lican_fem , cd_collapsed_fem, "weibull", p_fd_male, rr_lican_fd_fem)
+paf_lican_lognorm_fem <- calculate_paf_fd(b1_lican_fem , cd_fem, "lognorm", p_fd_fem, rr_lican_fd_fem)
+paf_lican_gamma_fem <- calculate_paf_fd(b1_lican_fem ,  cd_fem, "gamma", p_fd_male, rr_lican_fd_fem)
+paf_lican_weibull_fem <- calculate_paf_fd(b1_lican_fem , cd_fem, "weibull", p_fd_male, rr_lican_fd_fem)
 
 list(
   lognorm = paf_lican_lognorm_fem,
@@ -377,9 +390,9 @@ list(
 )
 
 # PAF BREAST CANCER
-paf_bcan_lognorm_fem <- calculate_paf_fd(b1_bcan , cd_collapsed_fem, "lognorm", p_fd_fem, rr_bcan_fd)
-paf_bcan_gamma_fem <- calculate_paf_fd(b1_bcan , cd_collapsed_fem, "gamma", p_fd_male, rr_bcan_fd)
-paf_bcan_weibull_fem <- calculate_paf_fd(b1_bcan , cd_collapsed_fem, "weibull", p_fd_male, rr_bcan_fd)
+paf_bcan_lognorm_fem <- calculate_paf_fd(b1_bcan , cd_fem, "lognorm", p_fd_fem, rr_bcan_fd)
+paf_bcan_gamma_fem <- calculate_paf_fd(b1_bcan , cd_fem, "gamma", p_fd_male, rr_bcan_fd)
+paf_bcan_weibull_fem <- calculate_paf_fd(b1_bcan , cd_fem, "weibull", p_fd_male, rr_bcan_fd)
 
 list(
   lognorm = paf_bcan_lognorm_fem,
@@ -388,6 +401,10 @@ list(
 )
 
 
+# PROBAR LA VERSIÓN CATEGÓRICA
+# PROBAR LA DISTRIBUCIÓN LA EMPÍRICA
+# PROBAR REGRESIÓN GAMMA
+# F INVERSA
 
 
 
