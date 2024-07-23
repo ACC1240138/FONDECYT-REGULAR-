@@ -577,10 +577,6 @@ data <- enpg_full %>%
     volCHMS = (voltotMINSAL*365)) %>% 
   filter(oh3 <=30)
 
-n_2018 = data %>% 
-  filter(year == 2008)
-summary(data$edad)
-
 rm(enpg_full)
 
 # APC OMS

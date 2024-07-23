@@ -407,6 +407,117 @@ list(
 # F INVERSA
 
 
+# EMPIRICAL DISTRIBUTION
+# Define the relative risk coefficient
+beta_1 <- 0.0179695
+data08 <- data08 %>%
+  filter(!is.na(volajohdia) & is.finite(volajohdia))
+# Define the relative risk function
+rr_function <- function(x) {
+  exp(b1_panc * x)
+}
+
+# Define the prevalence function based on the empirical data
+prevalence_function <- function(x, data) {
+  # Compute the density estimate of the empirical data
+  dens <- density(data$volajohdia, from = 0, to = 150, n = 512)
+  # Interpolate the density estimate to get the value at x
+  approx(dens$x, dens$y, xout = x)$y
+}
+
+# Define the integrand function that combines both the prevalence and relative risk functions
+integrand <- function(x, data) {
+  prevalence_function(x, data) * (rr_function(x) - 1)
+}
+
+# Perform numerical integration from 1 to 150
+result <- integrate(integrand, lower = 1, upper = 150, data = data08)
+
+
+
+
+
+data %>% 
+  group_by(year) %>% 
+  summarise(mean(volajohdia, na.rm = T),
+            sd(volajohdia, na.rm = T))
+
+
+data08 <- data %>% 
+  filter(year == 2008)
+table(!is.na(data08$voltotdia))
+
+data08 %>% 
+summarise(sum(voltotdia*exp, na.rm = T)/sum(exp))
+
+gamma_data <- data08 %>%
+  filter(volajohdia > 0) %>% 
+  mutate(edad_tramo = case_when(between(edad, 15, 29)~1,
+                                between(edad, 30,44)~2,
+                                between(edad,45,59)~3,
+                                between(edad,60,65)~4)) %>% 
+  dplyr::select(edad_tramo, volajohdia, sexo)
+fit_gamma_model <- function(subset_data) {
+  if (nrow(subset_data) < 2) return(NULL)  # Avoid fitting if too few data points
+  
+  # Remove NAs from the subset data
+  subset_data <- na.omit(subset_data)
+  
+  # Fit the gamma regression model
+  gamma_model <- gamlss(volajohdia ~ 1, family = GA, data = subset_data)
+  
+  # Predict the proportion of consumption for each observed level of volajohdia
+  predicted_proportions <- predict(gamma_model, type = "response")
+  
+  # Create a data frame with the original rows and predicted proportions
+  result <- data.frame(volajohdia = subset_data$volajohdia, predicted_proportions = predicted_proportions)
+  
+  return(result)
+}
+
+
+# Apply the function to each stratum of sex and age group
+predicted_proportions_list <- gamma_data %>%
+  group_by(sexo, edad_tramo) %>%
+  mutate(predicted_proportions = ifelse(volajohdia > 0, {
+    # Filter out zero values for fitting the gamma model
+    fit_data <- cur_data() %>% filter(volajohdia > 0)
+    
+    if (nrow(fit_data) < 2) {
+      rep(NA, n())
+    } else {
+      # Fit the gamma regression model
+      gamma_model <- gamlss(volajohdia ~ 1, family = GA, data = fit_data)
+      
+      # Predict the proportion of consumption for each observed level of volajohdia
+      predict(gamma_model, type = "response")
+    }
+  }, NA_real_))
+
+gamma_model <- gamlss(volajohdia ~ 1, family = GA, data = gamma_data[gamma_data$edad_tramo == 1,])
+fitted_values <- fitted(gamma_model, what = "mu")
+sigma_values <- fitted(gamma_model, what = "sigma")
+gamma_data <- gamma_data %>%
+  mutate(predicted_proportions = dGA(volajohdia, mu = fitted_values, sigma = sigma_values))
+
+hist(gamma_data$volajohdia)
+sum(gamma_data$predicted_proportions)
+
+predict_tramo1 <- predict(gamma_model, type = "response")
+gamma_data <- gamma_data %>%
+  mutate(predicted_values = predict(gamma_model, type = "response"))
+hist(gamma_data$predicted_values)
+# Calculate the total of the predicted values for normalizing
+total_predicted <- sum(gamma_data$predicted_values, na.rm = TRUE)
+
+# Calculate the predicted proportions as the predicted values divided by the total predicted values
+gamma_data <- gamma_data %>%
+  mutate(predicted_proportions = predicted_values / total_predicted)
+
+
+
+
+
 
 
 fit <- fitdist(cd_vector, "gamma")
@@ -483,3 +594,98 @@ p_rr <- ggplot(plot_rr, aes(x = x, y = rr)) +
 grid.arrange(p_gamma, p_rr, p_integrand, nrow = 3)
 
 
+####### CATEGORICAL VERSION
+table(data$cvolaj)
+capped_data <- data %>% 
+  mutate(volajohdia = ifelse(volajohdia > 150,150, volajohdia)) %>% 
+  mutate(edad_tramo = case_when(between(edad, 15, 29)~1,
+                                between(edad, 30,44)~2,
+                                between(edad,45,59)~3,
+                                between(edad,60,65)~4))
+filtered_data <- data %>% 
+  filter(volajohdia <= 150) %>% 
+  mutate(edad_tramo = case_when(between(edad, 15, 29)~1,
+                                between(edad, 30,44)~2,
+                                between(edad,45,59)~3,
+                                between(edad,60,65)~4))
+
+oh_level <- filtered_data %>% 
+  filter(!is.na(volajohdia)) %>% 
+  group_by(sexo, edad_tramo,cvolaj) %>% 
+  summarise(oh_level = median(volajohdia))
+filtered_data %>% 
+  filter(!is.na(volajohdia)) %>% 
+  group_by(cvolaj) %>% 
+  summarise(median(volajohdia))
+
+# ABSTINENTES = 0
+# CAT 1 = 8.05
+# CAT 2 = 40.1
+# CAT 3 = 69.0
+# CAT 4 = 152 / 121
+
+# PROPORTION OF LIFETIME ABSTAINERS
+prop_abs_male <- capped_data %>% 
+  filter(sexo == "Hombre") %>% 
+  count(oh1) %>% 
+  mutate(perc = round(n/sum(n),3)) %>% 
+  filter(oh1 == "No") %>% 
+  pull(perc)
+
+# 0.173
+prop_abs_fem <- capped_data %>% 
+  filter(sexo == "Mujer") %>% 
+  count(oh1) %>% 
+  mutate(perc = round(n/sum(n),3)) %>% 
+  filter(oh1 == "No") %>% 
+  pull(perc)
+# 0.271
+
+# PROPORTION OF FORMER DRINKERS
+prop_fd_male <- capped_data %>% 
+  filter(sexo == "Hombre", !is.na(oh2)) %>% 
+  count(oh2) %>% 
+  mutate(prop = round(n/sum(n),3)) %>% 
+  filter(oh2 == ">30" | oh2 == ">1 año") %>%
+  mutate(prop_sum = sum(prop)) %>% 
+  pull(prop_sum) %>% 
+  unique()
+# 0.377
+prop_fd_fem <- capped_data %>% 
+  filter(sexo == "Mujer", !is.na(oh2)) %>% 
+  count(oh2) %>% 
+  mutate(prop = round(n/sum(n),3)) %>% 
+  filter(oh2 == ">30" | oh2 == ">1 año") %>%
+  mutate(prop_sum = sum(prop)) %>% 
+  pull(prop_sum) %>% 
+  unique()
+# 0.535
+
+# PROPORTION OF CURRENT DRINKERS MALE
+prop_cd_male <- capped_data %>% 
+  filter(!is.na(cvolaj), cvolaj != "Abstinentes") %>% 
+  group_by(sexo,edad_tramo) %>% 
+  count(cvolaj) %>% 
+  mutate(prop = round(n/sum(n),3)) %>% 
+  filter(sexo == "Hombre") %>% 
+  left_join(oh_level, by = c("sexo","edad_tramo","cvolaj"))
+
+prop_cd_fem <- capped_data %>% 
+  filter(!is.na(cvolaj), cvolaj != "Abstinentes") %>% 
+  group_by(sexo,edad_tramo) %>% 
+  count(cvolaj) %>% 
+  mutate(prop = round(n/sum(n),3)) %>% 
+  filter(sexo == "Mujer") %>% 
+  left_join(oh_level, by = c("sexo","edad_tramo","cvolaj"))
+# tuberculosis hombres
+
+tb_male <- prop_cd_male %>% 
+  mutate(rr = exp(0.0179695*prop)) %>% 
+  dplyr::select(-n)
+tb_fem <- prop_cd_fem %>% 
+  mutate(rr = exp(0.0179695*prop)) %>% 
+  dplyr::select(-n)
+
+numerador <- 0.718*0.01+0.153*0+0.098*0+0.031*0
+denominador <- 0.718*1.01+0.153*1.00+0.098*1+0.031*1
+(prop_abs_fem+numerador)/(prop_abs_fem+denominador)
