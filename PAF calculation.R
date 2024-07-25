@@ -601,28 +601,143 @@ capped_data <- data %>%
   mutate(edad_tramo = case_when(between(edad, 15, 29)~1,
                                 between(edad, 30,44)~2,
                                 between(edad,45,59)~3,
-                                between(edad,60,65)~4))
+                                between(edad,60,65)~4),
+         cvolaj = case_when(oh1 == "No" ~ "ltabs",
+                            oh2 == ">30" | oh2 == ">1 año" ~ "fd",
+                            sexo == "Mujer" & volajohdia > 0 & volajohdia <= 19.99 ~ "cat1",
+                            sexo == "Mujer" & volajohdia >= 20 & volajohdia <= 39.99 ~ "cat2",
+                            sexo == "Mujer" & volajohdia >= 40 & volajohdia <= 100 ~ "cat3",
+                            sexo == "Mujer" & volajohdia > 100 ~ "cat4",
+                            sexo == "Hombre" & volajohdia > 0 & volajohdia <= 39.99 ~ "cat1",
+                            sexo == "Hombre" & volajohdia >= 40 & volajohdia <= 59.99 ~ "cat2",
+                            sexo == "Hombre" & volajohdia >= 60 & volajohdia <= 100 ~ "cat3",
+                            sexo == "Hombre" & volajohdia > 100 ~ "cat4",
+                            TRUE ~ NA))
 filtered_data <- data %>% 
   filter(volajohdia <= 150) %>% 
   mutate(edad_tramo = case_when(between(edad, 15, 29)~1,
                                 between(edad, 30,44)~2,
                                 between(edad,45,59)~3,
-                                between(edad,60,65)~4))
+                                between(edad,60,65)~4),
+         cvolaj = case_when(oh1 == "No" ~ "ltabs",
+                            oh2 == ">30" | oh2 == ">1 año" ~ "fd",
+                            sexo == "Mujer" & volajohdia > 0 & volajohdia <= 19.99 ~ "cat1",
+                            sexo == "Mujer" & volajohdia >= 20 & volajohdia <= 39.99 ~ "cat2",
+                            sexo == "Mujer" & volajohdia > 40  ~ "cat3",
+                            sexo == "Hombre" & volajohdia > 0 & volajohdia <= 39.99 ~ "cat1",
+                            sexo == "Hombre" & volajohdia >= 40 & volajohdia <= 59.99 ~ "cat2",
+                            sexo == "Hombre" & volajohdia > 60  ~ "cat3",
+                            TRUE ~ NA))
+data08 <- filtered_data %>% 
+  filter(year == 2008)
+# STRATIFIED CONSUMPTION LEVEL
+oh_level <- data08 %>% 
+  filter(!is.na(volajohdia),!is.na(cvolaj)) %>% 
+  group_by(sexo, edad_tramo,cvolaj) %>%
+  summarise(oh_level = round(median(volajohdia),1))
 
-oh_level <- filtered_data %>% 
-  filter(!is.na(volajohdia)) %>% 
-  group_by(sexo, edad_tramo,cvolaj) %>% 
-  summarise(oh_level = median(volajohdia))
-filtered_data %>% 
-  filter(!is.na(volajohdia)) %>% 
-  group_by(cvolaj) %>% 
-  summarise(median(volajohdia))
+# STRATIFIED PROPORTION OF CONSUMPTION LEVEL
+prop_level <- data08 %>% 
+  filter(!is.na(cvolaj)) %>% 
+  group_by(sexo, edad_tramo, cvolaj) %>%
+  summarise(weighted_count = sum(exp, na.rm = TRUE)) %>%
+  group_by(sexo, edad_tramo) %>%
+  mutate(prop = round(weighted_count / sum(weighted_count), 2)) %>%
+  dplyr::select(-weighted_count)
 
-# ABSTINENTES = 0
-# CAT 1 = 8.05
-# CAT 2 = 40.1
-# CAT 3 = 69.0
-# CAT 4 = 152 / 121
+# JOIN BOTH TABLES
+paf_base <- oh_level %>% 
+  left_join(prop_level, by = c("sexo", "edad_tramo","cvolaj"))
+
+# ESTIMATING PAF FOR BREAST CANCER
+paf_bc <- paf_base %>% 
+  filter(sexo=="Mujer") %>% 
+  mutate(rr = ifelse(cvolaj != "ltabs" & cvolaj != "fd",round(exp(b1_bcan*oh_level),1),NA))
+
+cat_paf_calculator <- function(data){
+  num1 = data[1,5]*(data[1,6]-1)+data[2,5]*(data[2,6]-1)+data[3,5]*(data[3,6]-1)
+  den1 = num1+1
+  num2 = data[6,5]*(data[6,6]-1)+data[7,5]*(data[7,6]-1)+data[8,5]*(data[8,6]-1)
+  den2 = num2+1
+  num3 = data[11,5]*(data[11,6]-1)+data[12,5]*(data[12,6]-1)+data[13,5]*(data[13,6]-1)
+  den3 = num3+1
+  num4 = data[16,5]*(data[16,6]-1)+data[17,5]*(data[17,6]-1)+data[18,5]*(data[18,6]-1)
+  den4 = num4+1
+  
+  # Calculate PAFs
+  paf_15_29 <- num1 / den1
+  paf_30_44 <- num2 / den2
+  paf_45_59 <- num3 / den3
+  paf_60_65 <- num4 / den4
+  
+  # Store the results in a list
+  result <- list(
+    "PAF for 15-29" = round(paf_15_29,2),
+    "PAF for 30-44" = round(paf_30_44,2),
+    "PAF for 45-59" = round(paf_45_59,2),
+    "PAF for 60-65" = round(paf_60_65,2)
+  )
+  
+  return(result)
+}
+cat_paf_calculator(paf_bc)
+
+paf_tb <- paf_base %>% 
+  filter(cvolaj != "ltabs", cvolaj != "fd") %>% 
+  mutate(rr = ifelse(cvolaj != "ltabs" & cvolaj != "fd",round(exp(b_tb*oh_level),1),NA))
+
+cat_paf_tb <- function(data){
+  num1 = data[1,5]*(data[1,6]-1)+data[2,5]*(data[2,6]-1)+data[3,5]*(data[3,6]-1)
+  den1 = num1+1
+  num2 = data[4,5]*(data[4,6]-1)+data[5,5]*(data[5,6]-1)+data[6,5]*(data[6,6]-1)
+  den2 = num2+1
+  num3 = data[7,5]*(data[7,6]-1)+data[8,5]*(data[8,6]-1)+data[9,5]*(data[9,6]-1)
+  den3 = num3+1
+  num4 = data[10,5]*(data[10,6]-1)+data[11,5]*(data[11,6]-1)+data[12,5]*(data[12,6]-1)
+  den4 = num4+1
+  
+  # Calculate PAFs
+  paf_15_29 <- num1 / den1
+  paf_30_44 <- num2 / den2
+  paf_45_59 <- num3 / den3
+  paf_60_65 <- num4 / den4
+  
+  # Store the results in a list
+  result <- list(
+    "PAF for 15-29 (Male)" = round(paf_15_29,3),
+    "PAF for 30-44 (Male)" = round(paf_30_44,3),
+    "PAF for 45-59 (Male)" = round(paf_45_59,3),
+    "PAF for 60-65 (Male)" = round(paf_60_65,3)
+  )
+  
+  return(result)
+}
+cat_paf_tb(paf_tb)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # PROPORTION OF LIFETIME ABSTAINERS
 prop_abs_male <- capped_data %>% 
