@@ -140,12 +140,12 @@ b_tb <- 0.0179695
 var_tb <- 0.0072152^2
 
 # HIV/AIDS (Male)
-b_hiv_male <- ln(1.54)
+b_hiv_male <- log(1.54)
 # for consumption > 61 grams/day
 var_hiv_male <- 0.0782107722^2
 
 # HIV/AIDS (Female)
-b_hiv_fem <- ln(1.54)
+b_hiv_fem <- log(1.54)
 # for consumption > 49 grams/day
 var_hiv_fem <- 0.0782107722^2
 
@@ -215,7 +215,8 @@ b2_lxcan <- -0.00002
 
 # Diabetes Mellitus (Male)
 b1_dm_male <- 0.1763703
-var_dm_male <- -0.0728256
+b2_dm_male <- -0.0728256
+
 # Variance-covariance matrix:
 # Variance (b1): 0.16812525
 # Variance (b2): 0.29964479
@@ -259,10 +260,454 @@ var_rr_panc_fd <- 0.213**2
 
 
 
+####### CATEGORICAL VERSION
+table(data$cvolaj)
+capped_data <- data %>% 
+  mutate(edad_tramo = case_when(between(edad, 15, 29)~1,
+                                between(edad, 30,44)~2,
+                                between(edad,45,59)~3,
+                                between(edad,60,65)~4),
+         cvolaj = case_when(oh1 == "No" ~ "ltabs",
+                            oh2 == ">30" | oh2 == ">1 año" ~ "fd",
+                            sexo == "Mujer" & volajohdia > 0 & volajohdia <= 19.99 ~ "cat1",
+                            sexo == "Mujer" & volajohdia >= 20 & volajohdia <= 39.99 ~ "cat2",
+                            sexo == "Mujer" & volajohdia > 40  ~ "cat3",
+                            sexo == "Hombre" & volajohdia > 0 & volajohdia <= 39.99 ~ "cat1",
+                            sexo == "Hombre" & volajohdia >= 40 & volajohdia <= 59.99 ~ "cat2",
+                            sexo == "Hombre" & volajohdia >= 60 ~ "cat3",
+                            TRUE ~ NA))
+filtered_data <- data %>% 
+  filter(volajohdia <= 150) %>% 
+  mutate(edad_tramo = case_when(between(edad, 15, 29)~1,
+                                between(edad, 30,44)~2,
+                                between(edad,45,59)~3,
+                                between(edad,60,65)~4),
+         cvolaj = case_when(oh1 == "No" ~ "ltabs",
+                            oh2 == ">30" | oh2 == ">1 año" ~ "fd",
+                            sexo == "Mujer" & volajohdia > 0 & volajohdia <= 19.99 ~ "cat1",
+                            sexo == "Mujer" & volajohdia >= 20 & volajohdia <= 39.99 ~ "cat2",
+                            sexo == "Mujer" & volajohdia > 40  ~ "cat3",
+                            sexo == "Hombre" & volajohdia > 0 & volajohdia <= 39.99 ~ "cat1",
+                            sexo == "Hombre" & volajohdia >= 40 & volajohdia <= 59.99 ~ "cat2",
+                            sexo == "Hombre" & volajohdia >= 60  ~ "cat3",
+                            TRUE ~ NA))
+
+# STRATIFIED CONSUMPTION LEVEL
+oh_level_median <- capped_data %>% 
+  filter(!is.na(volajohdia),!is.na(cvolaj)) %>% 
+  group_by(sexo, edad_tramo,cvolaj) %>%
+  summarise(oh_level = round(median(volajohdia),1))
+
+oh_level_mid <- oh_level_median %>% 
+  mutate(oh_level = case_when(sexo == "Hombre" & cvolaj == "cat1" ~ 10,
+                              sexo == "Hombre" & cvolaj == "cat2" ~ 30,
+                              sexo == "Hombre" & cvolaj == "cat3" ~ 105,
+                              sexo == "Mujer" & cvolaj == "cat1" ~ 10,
+                              sexo == "Mujer" & cvolaj == "cat2" ~ 30,
+                              sexo == "Mujer" & cvolaj == "cat3" ~ 95,
+                              TRUE ~ 0))
+# STRATIFIED PROPORTION OF CONSUMPTION LEVEL
+prop_level <- capped_data %>% 
+  filter(!is.na(cvolaj)) %>% 
+  group_by(sexo, edad_tramo, cvolaj) %>%
+  summarise(weighted_count = sum(exp, na.rm = TRUE)) %>%
+  group_by(sexo, edad_tramo) %>%
+  mutate(prop = round(weighted_count / sum(weighted_count), 2)) %>%
+  dplyr::select(-weighted_count)
+
+# JOIN BOTH TABLES
+paf_base_median <- oh_level_median %>% 
+  left_join(prop_level, by = c("sexo", "edad_tramo","cvolaj"))
+paf_base_mid <- oh_level_mid %>% 
+  left_join(prop_level, by = c("sexo", "edad_tramo","cvolaj"))
+
+####################################
+# ESTIMATING AAF FOR BREAST CANCER #
+####################################
+
+paf_bc_median <- paf_base_median %>% 
+  filter(sexo=="Mujer") %>% 
+  mutate(rr = ifelse(cvolaj != "ltabs" & cvolaj != "fd",round(exp(b1_bcan*oh_level),1),NA))
+
+paf_bc_mid <- paf_base_mid %>% 
+  filter(sexo=="Mujer") %>% 
+  mutate(rr = ifelse(cvolaj != "ltabs" & cvolaj != "fd",round(exp(b1_bcan*oh_level),1),NA))
+
+cat_paf_calculator <- function(data){
+  num1 = data[1,5]*(data[1,6]-1)+data[2,5]*(data[2,6]-1)+data[3,5]*(data[3,6]-1)
+  den1 = num1+1
+  num2 = data[6,5]*(data[6,6]-1)+data[7,5]*(data[7,6]-1)+data[8,5]*(data[8,6]-1)
+  den2 = num2+1
+  num3 = data[11,5]*(data[11,6]-1)+data[12,5]*(data[12,6]-1)+data[13,5]*(data[13,6]-1)
+  den3 = num3+1
+  num4 = data[16,5]*(data[16,6]-1)+data[17,5]*(data[17,6]-1)+data[18,5]*(data[18,6]-1)
+  den4 = num4+1
+  
+  # Calculate PAFs
+  paf_15_29 <- num1 / den1
+  paf_30_44 <- num2 / den2
+  paf_45_59 <- num3 / den3
+  paf_60_65 <- num4 / den4
+  
+  # Store the results in a list
+  result <- list(
+    "PAF for 15-29" = round(paf_15_29,2),
+    "PAF for 30-44" = round(paf_30_44,2),
+    "PAF for 45-59" = round(paf_45_59,2),
+    "PAF for 60-65" = round(paf_60_65,2)
+  )
+  
+  return(result)
+}
+cat_paf_calculator(paf_bc_median)
+cat_paf_calculator(paf_bc_mid)
 
 
+####################################
+# ESTIMATING AAF FOR TUBERCULOSIS  #
+####################################
+paf_tb_median <- paf_base_median %>% 
+  filter(cvolaj != "ltabs", cvolaj != "fd") %>% 
+  mutate(rr = ifelse(cvolaj != "ltabs" & cvolaj != "fd",round(exp(b_tb*oh_level),1),NA))
+paf_tb_mid <- paf_base_mid %>% 
+  filter(cvolaj != "ltabs", cvolaj != "fd") %>% 
+  mutate(rr = ifelse(cvolaj != "ltabs" & cvolaj != "fd",round(exp(b_tb*oh_level),1),NA))
+
+cat_paf <- function(data){
+  num1 = data[1,5]*(data[1,6]-1)+data[2,5]*(data[2,6]-1)+data[3,5]*(data[3,6]-1)
+  den1 = num1+1
+  num2 = data[4,5]*(data[4,6]-1)+data[5,5]*(data[5,6]-1)+data[6,5]*(data[6,6]-1)
+  den2 = num2+1
+  num3 = data[7,5]*(data[7,6]-1)+data[8,5]*(data[8,6]-1)+data[9,5]*(data[9,6]-1)
+  den3 = num3+1
+  num4 = data[10,5]*(data[10,6]-1)+data[11,5]*(data[11,6]-1)+data[12,5]*(data[12,6]-1)
+  den4 = num4+1
+  
+  num5 = data[13,5]*(data[13,6]-1)+data[14,5]*(data[14,6]-1)+data[15,5]*(data[15,6]-1)
+  den5 = num5+1
+  num6 = data[16,5]*(data[16,6]-1)+data[17,5]*(data[17,6]-1)+data[18,5]*(data[18,6]-1)
+  den6 = num6+1
+  num7 = data[19,5]*(data[19,6]-1)+data[20,5]*(data[20,6]-1)+data[21,5]*(data[21,6]-1)
+  den7 = num7+1
+  num8 = data[22,5]*(data[22,6]-1)+data[23,5]*(data[23,6]-1)+data[24,5]*(data[24,6]-1)
+  den8 = num8+1 
+   # Calculate PAFs
+  paf_15_29_m <- num1 / den1
+  paf_30_44_m <- num2 / den2
+  paf_45_59_m <- num3 / den3
+  paf_60_65_m <- num4 / den4
+  paf_15_29_f <- num5 / den5
+  paf_30_44_f <- num6 / den6
+  paf_45_59_f <- num7 / den7
+  paf_60_65_f <- num8 / den8
+  # Store the results in a list
+  result <- list(
+    "PAF for 15-29 (Male)" = round(paf_15_29_m,3),
+    "PAF for 30-44 (Male)" = round(paf_30_44_m,3),
+    "PAF for 45-59 (Male)" = round(paf_45_59_m,3),
+    "PAF for 60-65 (Male)" = round(paf_60_65_m,3),
+    "PAF for 15-29 (Fem)" = round(paf_15_29_f,3),
+    "PAF for 30-44 (Fem)" = round(paf_30_44_f,3),
+    "PAF for 45-59 (Fem)" = round(paf_45_59_f,3),
+    "PAF for 60-65 (Fem)" = round(paf_60_65_f,3)
+  )
+  
+  return(result)
+}
+cat_paf(paf_tb_median)
+cat_paf(paf_tb_mid)
+
+###########################
+# ESTIMATING AAF FOR HIV  #
+###########################
+
+paf_hiv_male <- capped_data %>% 
+  filter(sexo == "Hombre", !is.na(volajohdia)) %>% 
+  mutate(aux = ifelse(volajohdia >= 61, 1, 0)) %>% 
+  group_by(edad_tramo, aux) %>%
+  summarise(weighted_count = sum(exp, na.rm = TRUE)) %>%
+  group_by(edad_tramo) %>%
+  mutate(prop = round(weighted_count / sum(weighted_count), 2)) %>%
+  dplyr::select(-weighted_count) %>% 
+  mutate(rr = ifelse(aux == 1, exp(b_hiv_male), 1)) %>% 
+  filter(aux == 1)
+
+paf_hiv_fem <- capped_data %>% 
+  filter(sexo == "Mujer", !is.na(volajohdia)) %>% 
+  mutate(aux = ifelse(volajohdia >= 49, 1, 0)) %>% 
+  group_by(edad_tramo, aux) %>%
+  summarise(weighted_count = sum(exp, na.rm = TRUE)) %>%
+  group_by(edad_tramo) %>%
+  mutate(prop = round(weighted_count / sum(weighted_count), 2)) %>%
+  dplyr::select(-weighted_count) %>% 
+  mutate(rr = ifelse(aux == 1, exp(b_hiv_male), 1)) %>% 
+  filter(aux == 1)
+
+paf_hiv_calc <- function(data){
+  num1 = data[1,3]*(data[1,4]-1)
+  den1 = num1+1
+  num2 = data[2,3]*(data[2,4]-1)
+  den2 = num2+1
+  num3 = data[3,3]*(data[3,4]-1)
+  den3 = num3+1
+  num4 = data[4,3]*(data[4,4]-1)
+  den4 = num4+1
+  
+  # Calculate PAFs
+  paf_15_29 <- num1 / den1
+  paf_30_44 <- num2 / den2
+  paf_45_59 <- num3 / den3
+  paf_60_65 <- num4 / den4
+  
+  # Store the results in a list
+  result <- list(
+    "PAF for 15-29 (Male)" = round(paf_15_29,3),
+    "PAF for 30-44 (Male)" = round(paf_30_44,3),
+    "PAF for 45-59 (Male)" = round(paf_45_59,3),
+    "PAF for 60-65 (Male)" = round(paf_60_65,3)
+  )
+  
+  return(result)
+}
+
+paf_hiv_calc(paf_hiv_male)
+paf_hiv_calc(paf_hiv_fem)
+
+####################################################
+# ESTIMATING AAF FOR LOWER RESPIRATORY INFECTIONS  #
+####################################################
+paf_lri_median <- paf_base_median %>% 
+  filter(cvolaj != "ltabs", cvolaj != "fd") %>% 
+  mutate(rr = ifelse(cvolaj != "ltabs" & cvolaj != "fd",round(exp(b_lri*((oh_level+0.0399999618530273)/100)),1),NA))
+paf_lri_mid <- paf_base_mid %>% 
+  filter(cvolaj != "ltabs", cvolaj != "fd") %>% 
+  mutate(rr = ifelse(cvolaj != "ltabs" & cvolaj != "fd",round(exp(b_lri*((oh_level+0.0399999618530273)/100)),1),NA))
+
+cat_paf(paf_lri_median)
+cat_paf(paf_lri_mid)
+
+####################################################
+# ESTIMATING AAF FOR LIP AND ORAL CAVITY CANCER   #
+####################################################
+paf_locan_median <- paf_base_median %>% 
+  filter(cvolaj != "ltabs") %>% 
+  mutate(rr = ifelse(cvolaj == "fd",1.2,round(exp(b1_locan*oh_level+b2_locan*oh_level**2),1)))
+paf_locan_mid <- paf_base_mid %>% 
+  filter(cvolaj != "ltabs") %>% 
+  mutate(rr = ifelse(cvolaj == "fd",1.2,round(exp(b1_locan*oh_level+b2_locan*oh_level**2),1)))
+
+cat_paf_fd <- function(data){
+  num1 = data[1,5]*(data[1,6]-1)+data[2,5]*(data[2,6]-1)+data[3,5]*(data[3,6]-1)+data[4,5]*(data[4,6]-1)
+  den1 = num1+1
+  num2 = data[5,5]*(data[5,6]-1)+data[6,5]*(data[6,6]-1)+data[7,5]*(data[7,6]-1)+data[8,5]*(data[8,6]-1)
+  den2 = num2+1
+  num3 = data[9,5]*(data[9,6]-1)+data[10,5]*(data[10,6]-1)+data[11,5]*(data[11,6]-1)+data[12,5]*(data[12,6]-1)
+  den3 = num3+1
+  num4 = data[13,5]*(data[13,6]-1)+data[14,5]*(data[14,6]-1)+data[15,5]*(data[15,6]-1)+data[16,5]*(data[16,6]-1)
+  den4 = num4+1
+  
+  num5 = data[17,5]*(data[17,6]-1)+data[18,5]*(data[18,6]-1)+data[19,5]*(data[19,6]-1)+data[20,5]*(data[20,6]-1)
+  den5 = num5+1
+  num6 = data[21,5]*(data[21,6]-1)+data[22,5]*(data[22,6]-1)+data[23,5]*(data[23,6]-1)+data[24,5]*(data[24,6]-1)
+  den6 = num6+1
+  num7 = data[25,5]*(data[25,6]-1)+data[26,5]*(data[26,6]-1)+data[27,5]*(data[27,6]-1)+data[28,5]*(data[28,6]-1)
+  den7 = num7+1
+  num8 = data[29,5]*(data[29,6]-1)+data[30,5]*(data[30,6]-1)+data[31,5]*(data[31,6]-1)+data[32,5]*(data[32,6]-1)
+  den8 = num8+1 
+  # Calculate PAFs
+  paf_15_29_m <- num1 / den1
+  paf_30_44_m <- num2 / den2
+  paf_45_59_m <- num3 / den3
+  paf_60_65_m <- num4 / den4
+  paf_15_29_f <- num5 / den5
+  paf_30_44_f <- num6 / den6
+  paf_45_59_f <- num7 / den7
+  paf_60_65_f <- num8 / den8
+  # Store the results in a list
+  result <- list(
+    "PAF for 15-29 (Male)" = round(paf_15_29_m,3),
+    "PAF for 30-44 (Male)" = round(paf_30_44_m,3),
+    "PAF for 45-59 (Male)" = round(paf_45_59_m,3),
+    "PAF for 60-65 (Male)" = round(paf_60_65_m,3),
+    "PAF for 15-29 (Fem)" = round(paf_15_29_f,3),
+    "PAF for 30-44 (Fem)" = round(paf_30_44_f,3),
+    "PAF for 45-59 (Fem)" = round(paf_45_59_f,3),
+    "PAF for 60-65 (Fem)" = round(paf_60_65_f,3)
+  )
+  
+  return(result)
+  
+}
+cat_paf_fd(paf_locan_mid)
+cat_paf_fd(paf_locan_median)
+cat_paf(paf_locan_median %>% filter(cvolaj != "fd"))
+cat_paf(paf_locan_mid %>% filter(cvolaj != "fd"))
+
+################################################
+# ESTIMATING AAF FOR OTHER PHARINGEAL CANCER   #
+################################################
+paf_opcan_median <- paf_base_median %>% 
+  filter(cvolaj != "ltabs") %>% 
+  mutate(rr = ifelse(cvolaj == "fd",1.2,round(exp(b1_locan*oh_level+b2_locan*oh_level**2),1)))
+paf_opcan_mid <- paf_base_mid %>% 
+  filter(cvolaj != "ltabs") %>% 
+  mutate(rr = ifelse(cvolaj == "fd",1.2,round(exp(b1_opcan*oh_level+b2_opcan*oh_level**2),1)))
+
+cat_paf_fd(paf_opcan_median)
+cat_paf_fd(paf_opcan_mid)
+cat_paf(paf_opcan_median %>% filter(cvolaj != "fd"))
+cat_paf(paf_opcan_mid %>%  filter(cvolaj != "fd"))
+
+##########################################
+# ESTIMATING AAF FOR OESOPHAFUS CANCER   #
+##########################################
+paf_oescan_median <- paf_base_median %>% 
+  filter(cvolaj != "ltabs") %>% 
+  mutate(rr = ifelse(cvolaj == "fd",1.16,round(exp(b1_oescan*oh_level+b2_oescan*oh_level**3),1)))
+paf_oescan_mid <- paf_base_mid %>% 
+  filter(cvolaj != "ltabs") %>% 
+  mutate(rr = ifelse(cvolaj == "fd",1.16,round(exp(b1_oescan*oh_level+b2_oescan*oh_level**3),1)))
+
+cat_paf_fd(paf_oescan_median)
+cat_paf_fd(paf_oescan_mid)
+
+cat_paf(paf_oescan_median %>% filter(cvolaj != "fd"))
+cat_paf(paf_oescan_mid %>% filter(cvolaj != "fd"))
+################################################
+# ESTIMATING AAF FOR COLON AND RECTUM CANCER   #
+################################################
+paf_crcan_median <- paf_base_median %>% 
+  filter(cvolaj != "ltabs") %>% 
+  mutate(rr = case_when(cvolaj == "fd" & sexo == "Hombre"~2.19,
+                        cvolaj == "fd" & sexo == "Mujer"~1.05,
+                        sexo == "Hombre"~exp(b1_crcan_male*oh_level),
+                        sexo == "Mujer"~exp(b1_crcan_fem*oh_level)))
+paf_crcan_mid <- paf_base_mid %>% 
+  filter(cvolaj != "ltabs") %>% 
+  mutate(rr = case_when(cvolaj == "fd" & sexo == "Hombre"~2.19,
+                        cvolaj == "fd" & sexo == "Mujer"~1.05,
+                        sexo == "Hombre"~exp(b1_crcan_male*oh_level),
+                        sexo == "Mujer"~exp(b1_crcan_fem*oh_level)))
+
+cat_paf_fd(paf_crcan_median)
+cat_paf_fd(paf_crcan_mid)
+cat_paf(paf_crcan_median %>% filter(cvolaj != "fd"))
+cat_paf(paf_crcan_mid %>% filter(cvolaj != "fd"))
+
+######################################
+# ESTIMATING AAF FOR LIVER CANCER   #
+#####################################
+paf_lican_median <- paf_base_median %>% 
+  filter(cvolaj != "ltabs") %>% 
+  mutate(rr = case_when(cvolaj == "fd" & sexo == "Hombre"~2.23,
+                        cvolaj == "fd" & sexo == "Mujer"~2.68,
+                        sexo == "Hombre"~exp(b1_lican_male*oh_level),
+                        sexo == "Mujer"~exp(b1_lican_fem*oh_level)))
+paf_lican_mid <- paf_base_mid %>% 
+  filter(cvolaj != "ltabs") %>% 
+  mutate(rr = case_when(cvolaj == "fd" & sexo == "Hombre"~2.23,
+                        cvolaj == "fd" & sexo == "Mujer"~2.68,
+                        sexo == "Hombre"~exp(b1_lican_male*oh_level),
+                        sexo == "Mujer"~exp(b1_lican_fem*oh_level)))
+
+cat_paf_fd(paf_lican_median)
+cat_paf_fd(paf_lican_mid)
+cat_paf(paf_lican_median %>% filter(cvolaj != "fd"))
+cat_paf(paf_lican_mid %>% filter(cvolaj != "fd"))
 
 
+######################################
+# ESTIMATING AAF FOR LARYNX CANCER   #
+#####################################
+paf_lxcan_median <- paf_base_median %>% 
+  filter(cvolaj != "ltabs") %>% 
+  mutate(rr = ifelse(cvolaj == "fd",1.18,exp(b1_lxcan*oh_level)))
+                       
+paf_lxcan_mid <- paf_base_mid %>% 
+  filter(cvolaj != "ltabs") %>% 
+  mutate(rr = ifelse(cvolaj == "fd",1.18,exp(b1_lxcan*oh_level)))
+
+
+cat_paf_fd(paf_lxcan_median)
+cat_paf_fd(paf_lxcan_mid)
+cat_paf(paf_lxcan_median %>% filter(cvolaj != "fd"))
+cat_paf(paf_lxcan_mid %>% filter(cvolaj != "fd"))
+
+########################################
+# ESTIMATING AAF FOR DIABETES MELLITUS #
+########################################
+paf_dm_median <- paf_base_median %>% 
+  filter(cvolaj != "ltabs") %>% 
+  mutate(rr = case_when(cvolaj == "fd" & sexo == "Hombre"~1.18,
+                        cvolaj == "fd" & sexo == "Mujer"~1.14,
+                        sexo == "Hombre"~exp((b1_dm_male*(oh_level/100)**2)+(b2_dm_male*(oh_level/100)**3)),
+                        sexo == "Mujer"~exp(b1_dm_fem*sqrt(oh_level/100)+b2_dm_fem*(oh_level/100))))
+paf_dm_mid <- paf_base_mid %>% 
+  filter(cvolaj != "ltabs") %>% 
+  mutate(rr = case_when(cvolaj == "fd" & sexo == "Hombre"~1.18,
+                        cvolaj == "fd" & sexo == "Mujer"~1.14,
+                        sexo == "Hombre"~exp((b1_dm_male*(oh_level/100)**2)+(b2_dm_male*(oh_level/100)**3)),
+                        sexo == "Mujer"~exp(b1_dm_fem*sqrt(oh_level/100)+b2_dm_fem*(oh_level/100))))
+
+
+cat_paf_fd(paf_dm_median)
+cat_paf_fd(paf_dm_mid)
+cat_paf(paf_dm_median %>% filter(cvolaj != "fd"))
+cat_paf(paf_dm_mid %>% filter(cvolaj != "fd"))
+
+################################
+# ESTIMATING AAF FOR EPILEPSY #
+###############################
+paf_epi_median <- paf_base_median %>% 
+  filter(cvolaj != "ltabs") %>% 
+  mutate(rr = ifelse(cvolaj == "fd",1,exp(b1_epi*((oh_level+0.5)/100))))
+
+paf_epi_mid <- paf_base_mid %>% 
+  filter(cvolaj != "ltabs") %>% 
+  mutate(rr = ifelse(cvolaj == "fd",1,exp(b1_epi*((oh_level+0.5)/100))))
+
+cat_paf_fd(paf_epi_median)
+cat_paf_fd(paf_epi_mid)
+cat_paf(paf_epi_median %>% filter(cvolaj != "fd"))
+cat_paf(paf_epi_mid %>% filter(cvolaj != "fd"))
+
+#################################################
+# ESTIMATING AAF FOR HYPERTENSIVE HEART DISEASE #
+#################################################
+
+paf_hhd_male <- capped_data %>% 
+  filter(sexo == "Hombre", !is.na(volajohdia), volajohdia > 0) %>% 
+  mutate(aux = case_when(volajohdia <21~1,
+                         volajohdia >=21 & volajohdia < 75~2,
+                         volajohdia >= 75~3),
+         sexo = "Hombre") %>% 
+  group_by(sexo,edad_tramo, aux) %>%
+  summarise(weighted_count = sum(exp, na.rm = TRUE),
+            oh_level = median(volajohdia)) %>%
+  group_by(edad_tramo) %>%
+  mutate(prop = round(weighted_count / sum(weighted_count), 2)) %>%
+  dplyr::select(-weighted_count) %>% 
+  mutate(rr = case_when(aux == 1 ~ exp(b1_hhd_male*oh_level-b2_hhd_male*(oh_level**3/75**2)),
+                        aux == 2 ~ exp(b1_hhd_male*oh_level+b2_hhd_male*((oh_level**3-(oh_level-21)**3*75)/(75-21))/75**2),
+                        aux == 3 ~ exp(b1_hhd_male*oh_level+b2_hhd_male*(oh_level**3-((oh_level-21)**3*75-(oh_level-75)**3*21)/(75-21))/75**2)))
+
+paf_hhd_fem <- capped_data %>% 
+  filter(sexo == "Mujer", !is.na(volajohdia), volajohdia >0) %>% 
+  mutate(aux = case_when(volajohdia <18.99~1,
+                         volajohdia >=18.99 & volajohdia < 75~2,
+                         volajohdia >= 75~3),
+         sexo = "Mujer") %>%  
+  group_by(sexo,edad_tramo, aux) %>%
+  summarise(weighted_count = sum(exp, na.rm = TRUE),
+            oh_level = median(volajohdia)) %>% 
+  group_by(edad_tramo) %>%
+  mutate(prop = round(weighted_count / sum(weighted_count), 2)) %>%
+  dplyr::select(-weighted_count) %>% 
+  mutate(rr = case_when(aux == 1 ~ 1,
+                        aux == 2 ~ exp(b1_hhd_fem*oh_level+b2_hhd_fem*(oh_level**3-((oh_level-10)**3*20-(oh_level-20)**3*10)/(20-10))/20**2),
+                        aux == 3 ~ exp(b1_hhd_fem*116+b2_hhd_fem*((75**3-(((75-10)**3*20-(75-20)**3*10)/(20-10)))/20**2))))
+paf_hhd <- bind_rows(paf_hhd_male, paf_hhd_fem)
+cat_paf(paf_hhd)
 
 
 
@@ -593,126 +1038,6 @@ p_rr <- ggplot(plot_rr, aes(x = x, y = rr)) +
 
 grid.arrange(p_gamma, p_rr, p_integrand, nrow = 3)
 
-
-####### CATEGORICAL VERSION
-table(data$cvolaj)
-capped_data <- data %>% 
-  mutate(volajohdia = ifelse(volajohdia > 150,150, volajohdia)) %>% 
-  mutate(edad_tramo = case_when(between(edad, 15, 29)~1,
-                                between(edad, 30,44)~2,
-                                between(edad,45,59)~3,
-                                between(edad,60,65)~4),
-         cvolaj = case_when(oh1 == "No" ~ "ltabs",
-                            oh2 == ">30" | oh2 == ">1 año" ~ "fd",
-                            sexo == "Mujer" & volajohdia > 0 & volajohdia <= 19.99 ~ "cat1",
-                            sexo == "Mujer" & volajohdia >= 20 & volajohdia <= 39.99 ~ "cat2",
-                            sexo == "Mujer" & volajohdia >= 40 & volajohdia <= 100 ~ "cat3",
-                            sexo == "Mujer" & volajohdia > 100 ~ "cat4",
-                            sexo == "Hombre" & volajohdia > 0 & volajohdia <= 39.99 ~ "cat1",
-                            sexo == "Hombre" & volajohdia >= 40 & volajohdia <= 59.99 ~ "cat2",
-                            sexo == "Hombre" & volajohdia >= 60 & volajohdia <= 100 ~ "cat3",
-                            sexo == "Hombre" & volajohdia > 100 ~ "cat4",
-                            TRUE ~ NA))
-filtered_data <- data %>% 
-  filter(volajohdia <= 150) %>% 
-  mutate(edad_tramo = case_when(between(edad, 15, 29)~1,
-                                between(edad, 30,44)~2,
-                                between(edad,45,59)~3,
-                                between(edad,60,65)~4),
-         cvolaj = case_when(oh1 == "No" ~ "ltabs",
-                            oh2 == ">30" | oh2 == ">1 año" ~ "fd",
-                            sexo == "Mujer" & volajohdia > 0 & volajohdia <= 19.99 ~ "cat1",
-                            sexo == "Mujer" & volajohdia >= 20 & volajohdia <= 39.99 ~ "cat2",
-                            sexo == "Mujer" & volajohdia > 40  ~ "cat3",
-                            sexo == "Hombre" & volajohdia > 0 & volajohdia <= 39.99 ~ "cat1",
-                            sexo == "Hombre" & volajohdia >= 40 & volajohdia <= 59.99 ~ "cat2",
-                            sexo == "Hombre" & volajohdia > 60  ~ "cat3",
-                            TRUE ~ NA))
-data08 <- filtered_data %>% 
-  filter(year == 2008)
-# STRATIFIED CONSUMPTION LEVEL
-oh_level <- data08 %>% 
-  filter(!is.na(volajohdia),!is.na(cvolaj)) %>% 
-  group_by(sexo, edad_tramo,cvolaj) %>%
-  summarise(oh_level = round(median(volajohdia),1))
-
-# STRATIFIED PROPORTION OF CONSUMPTION LEVEL
-prop_level <- data08 %>% 
-  filter(!is.na(cvolaj)) %>% 
-  group_by(sexo, edad_tramo, cvolaj) %>%
-  summarise(weighted_count = sum(exp, na.rm = TRUE)) %>%
-  group_by(sexo, edad_tramo) %>%
-  mutate(prop = round(weighted_count / sum(weighted_count), 2)) %>%
-  dplyr::select(-weighted_count)
-
-# JOIN BOTH TABLES
-paf_base <- oh_level %>% 
-  left_join(prop_level, by = c("sexo", "edad_tramo","cvolaj"))
-
-# ESTIMATING PAF FOR BREAST CANCER
-paf_bc <- paf_base %>% 
-  filter(sexo=="Mujer") %>% 
-  mutate(rr = ifelse(cvolaj != "ltabs" & cvolaj != "fd",round(exp(b1_bcan*oh_level),1),NA))
-
-cat_paf_calculator <- function(data){
-  num1 = data[1,5]*(data[1,6]-1)+data[2,5]*(data[2,6]-1)+data[3,5]*(data[3,6]-1)
-  den1 = num1+1
-  num2 = data[6,5]*(data[6,6]-1)+data[7,5]*(data[7,6]-1)+data[8,5]*(data[8,6]-1)
-  den2 = num2+1
-  num3 = data[11,5]*(data[11,6]-1)+data[12,5]*(data[12,6]-1)+data[13,5]*(data[13,6]-1)
-  den3 = num3+1
-  num4 = data[16,5]*(data[16,6]-1)+data[17,5]*(data[17,6]-1)+data[18,5]*(data[18,6]-1)
-  den4 = num4+1
-  
-  # Calculate PAFs
-  paf_15_29 <- num1 / den1
-  paf_30_44 <- num2 / den2
-  paf_45_59 <- num3 / den3
-  paf_60_65 <- num4 / den4
-  
-  # Store the results in a list
-  result <- list(
-    "PAF for 15-29" = round(paf_15_29,2),
-    "PAF for 30-44" = round(paf_30_44,2),
-    "PAF for 45-59" = round(paf_45_59,2),
-    "PAF for 60-65" = round(paf_60_65,2)
-  )
-  
-  return(result)
-}
-cat_paf_calculator(paf_bc)
-
-paf_tb <- paf_base %>% 
-  filter(cvolaj != "ltabs", cvolaj != "fd") %>% 
-  mutate(rr = ifelse(cvolaj != "ltabs" & cvolaj != "fd",round(exp(b_tb*oh_level),1),NA))
-
-cat_paf_tb <- function(data){
-  num1 = data[1,5]*(data[1,6]-1)+data[2,5]*(data[2,6]-1)+data[3,5]*(data[3,6]-1)
-  den1 = num1+1
-  num2 = data[4,5]*(data[4,6]-1)+data[5,5]*(data[5,6]-1)+data[6,5]*(data[6,6]-1)
-  den2 = num2+1
-  num3 = data[7,5]*(data[7,6]-1)+data[8,5]*(data[8,6]-1)+data[9,5]*(data[9,6]-1)
-  den3 = num3+1
-  num4 = data[10,5]*(data[10,6]-1)+data[11,5]*(data[11,6]-1)+data[12,5]*(data[12,6]-1)
-  den4 = num4+1
-  
-  # Calculate PAFs
-  paf_15_29 <- num1 / den1
-  paf_30_44 <- num2 / den2
-  paf_45_59 <- num3 / den3
-  paf_60_65 <- num4 / den4
-  
-  # Store the results in a list
-  result <- list(
-    "PAF for 15-29 (Male)" = round(paf_15_29,3),
-    "PAF for 30-44 (Male)" = round(paf_30_44,3),
-    "PAF for 45-59 (Male)" = round(paf_45_59,3),
-    "PAF for 60-65 (Male)" = round(paf_60_65,3)
-  )
-  
-  return(result)
-}
-cat_paf_tb(paf_tb)
 
 
 

@@ -520,7 +520,7 @@ gc()
 library(dplyr)
 library(readr)
 library(haven)
-
+table(data$oh3)
 enpg_full <- readRDS("enpg_full.RDS")
 data <- enpg_full %>% 
   filter(edad >=15) %>% 
@@ -593,47 +593,48 @@ conversion <- function(x,vol){
 }
 
 # 2008 = 7.8
+total_volCH[1,3]/(7.8*0.789*1000)
 
 conversion(7.8,total_volCH[1,3])
-# 5.53
+# 5.4
 
 # 2010 = 7.8
 conversion(7.8,total_volCH[2,3])
-# 5.31
+# 5.18
 
 # 2012 = 7.8
 conversion(7.8,total_volCH[3,3])
-# 5.4
+# 5.26
 
 # 2014 = 7.8
 conversion(7.8,total_volCH[4,3])
-# 5.48
+# 5.37
 
 # 2016 = 6.7
 conversion(6.7,total_volCH[5,3])
-# 4.21
+# 4.13
 
 # 2018 = 6.7
 conversion(6.7,total_volCH[6,3])
-# 2.41
+# 2.52
 
 # 2020 = 7.5
 conversion(7.5,total_volCH[7,3])
-# 4.86
+# 4.83
 
 # 2022 = 7.5 (repetido)
 conversion(7.5,total_volCH[8,3])
-# 5.62
+# 5.53
 
 data <- data %>% 
-mutate(volaj = case_when(year == 2008 ~ volCH*5.53,
-                         year == 2010 ~ volCH*5.31,
-                         year == 2012 ~ volCH*5.4,
-                         year == 2014 ~ volCH*5.48,
-                         year == 2016 ~ volCH*4.21,
-                         year == 2018 ~ volCH*2.41,
-                         year == 2020 ~ volCH*4.86,
-                         year == 2022 ~ volCH*5.62),
+mutate(volaj = case_when(year == 2008 ~ volCH*5.4,
+                         year == 2010 ~ volCH*5.18,
+                         year == 2012 ~ volCH*5.26,
+                         year == 2014 ~ volCH*5.37,
+                         year == 2016 ~ volCH*4.13,
+                         year == 2018 ~ volCH*2.52,
+                         year == 2020 ~ volCH*4.83,
+                         year == 2022 ~ volCH*5.53),
        volajohdia = volaj/365,
        cvolaj = case_when(
   sexo == "Mujer" & volajohdia == 0 ~ 0,
