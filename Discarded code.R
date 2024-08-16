@@ -480,3 +480,130 @@ tb_fem <- prop_cd_fem %>%
 numerador <- 0.718*0.01+0.153*0+0.098*0+0.031*0
 denominador <- 0.718*1.01+0.153*1.00+0.098*1+0.031*1
 (prop_abs_fem+numerador)/(prop_abs_fem+denominador)
+
+
+# MEAN VALUES FOR MALES
+compute_mu <- function(p1, p2, p3, p4, a, b, c, d, 
+                       prop_abs1, prop_abs2, prop_abs3, prop_abs4, 
+                       prop_form1, prop_form2, prop_form3, prop_form4, 
+                       pca) {
+  # Calculate the number of current drinkers in each age group
+  drk1 <- p1 * (1 - prop_abs1 - prop_form1)
+  drk2 <- p2 * (1 - prop_abs2 - prop_form2)
+  drk3 <- p3 * (1 - prop_abs3 - prop_form3)
+  drk4 <- p4 * (1 - prop_abs4 - prop_form4)
+  
+  # Adjust per capita alcohol consumption for drinkers
+  pca_drinker <- pca * (p1 + p2 + p3 + p4) / (drk1 + drk2 + drk3 + drk4)
+  
+  # Compute the mean consumption for each age group
+  mu1 <- pca_drinker * (drk1 + drk2 + drk3 + drk4) / 
+    (drk1 + b/a * drk2 + c/a * drk3 + d/a * drk4)
+  mu2 <- b/a * mu1
+  mu3 <- c/a * mu1
+  mu4 <- d/a * mu1
+  mu <- c(mu1, mu2, mu3, mu4)
+  
+  return(mu)
+}
+pca_male <- data_input %>% filter(sexo == "Hombre") %>% summarise(pop = sum(exp),
+                                                                  pca = sum(volajohdia*365*exp, na.rm = T)/pop) %>% pull(pca)
+pca_fem <- data_input %>% filter(sexo == "Mujer") %>% summarise(pop = sum(exp),
+                                                                pca = sum(volajohdia*365*exp, na.rm = T)/pop) %>% pull(pca)
+p1_male <-  sum(input[1, 4], input[2, 4], input[3, 4], input[4, 4], input[5, 4],input[6, 4])
+p2_male <- sum(input[7, 4], input[8, 4],input[9, 4], input[10, 4], input[11, 4], input[12, 4])
+p3_male <- sum(input[13, 4], input[14, 4],input[15, 4], input[16, 4], input[17, 4], input[18, 4])
+p4_male <- sum(input[19, 4], input[20, 4],input[21, 4], input[22, 4], input[23, 4], input[24, 4])
+r_p1_male <- props[1]
+r_p2_male <- props[2]
+r_p3_male <- props[3]
+r_p4_male <- props[4]
+mean_male <- compute_mu(p1_male, p2_male, p3_male, p4_male, r_p1_male,r_p2_male, r_p3_male, r_p4_male,
+                        p_abs_male1, p_abs_male2, p_abs_male3, p_abs_male4, p_form_male1, p_form_male2, p_form_male3,
+                        p_form_male4, pca_male)
+sd_male = 1.171*mean_male
+k_male = mean_male^2/sd_male^2
+theta_male = sd_male^2/mean_male
+p1_fem <-  sum(input[25, 4], input[26, 4], input[27, 4], input[28, 4], input[29, 4],input[30, 4])
+p2_fem <- sum(input[31, 4], input[32, 4],input[33, 4], input[34, 4], input[35, 4], input[36, 4])
+p3_fem <- sum(input[37, 4], input[38, 4],input[39, 4], input[40, 4], input[41, 4], input[42, 4])
+p4_fem <- sum(input[43, 4], input[44, 4],input[45, 4], input[46, 4], input[47, 4], input[48, 4])
+r_p1_fem <- props[5]
+r_p2_fem <- props[6]
+r_p3_fem <- props[7]
+r_p4_fem <- props[8]
+mean_fem <- compute_mu(p1_fem, p2_fem, p3_fem, p4_fem, r_p1_fem,r_p2_fem, r_p3_fem, r_p4_fem,
+                       p_abs_fem1, p_abs_fem2, p_abs_fem3, p_abs_fem4, p_form_fem1, p_form_fem2, p_form_fem3,
+                       p_form_fem4, pca_fem)
+sd_fem = 1.171*mean_fem
+k_fem = mean_fem^2/sd_fem^2
+theta_fem = sd_fem^2/mean_fem
+nmale = length (k_male) 
+nfem <- length (k_fem)
+
+# Assuming 'N' is the number of simulations
+N <- 10000
+simulated_pafs <- numeric(N)
+
+# Loop for Monte Carlo Simulation
+for (i in 1:N) {
+  
+  # Step 1: Simulate per capita alcohol consumption
+  pca_sim <- rnorm(1, mean = mean_pca, sd = sd_pca)
+  pca_sim <- ifelse(pca_sim <= 0, 0.001, pca_sim)  # Handling zero or negative values
+  
+  # Step 2: Simulate proportions of lifetime abstainers and former drinkers
+  prop_abs_sim <- rbinom(1, size = effective_sample_size, prob = prop_abs) / effective_sample_size
+  prop_form_sim <- rbinom(1, size = effective_sample_size, prob = prop_form) / effective_sample_size
+  
+  # Step 3: Estimate mean consumption for drinkers
+  drk_sim <- (1 - prop_abs_sim - prop_form_sim) * pca_sim
+  mean_drk <- compute_mu(p1, p2, p3, p4, a, b, c, d, prop_abs_sim, prop_abs_sim, prop_form_sim, pca_sim)
+  
+  # Calculate gamma parameters
+  k_sim <- mean_drk^2 / (sd_drk^2)
+  theta_sim <- sd_drk^2 / mean_drk
+  
+  # Step 4: Simulate beta coefficients for relative risk
+  beta_sim <- mvrnorm(1, mu = beta_mean, Sigma = beta_cov)
+  rr_sim <- function(x) { exp(beta_sim[1] * x) }
+  
+  # Step 5: Calculate PAF using the simulated parameters
+  simulated_pafs[i] <- trap_int(x_vals, y_gamma, rr_sim(x_vals), prop_fd = prop_form_sim, rr_fd = rr_fd_sim)
+}
+
+# Step 6: Calculate confidence intervals
+ci_lower <- quantile(simulated_pafs, 0.025)
+ci_upper <- quantile(simulated_pafs, 0.975)
+
+# Report PAF with 95% confidence intervals
+list(paf = mean(simulated_pafs), lower = ci_lower, upper = ci_upper)
+
+
+
+Recalculate the normalization constant
+prevalencegamma <- function(x) { dgamma(x, shape = k_fem[1], scale = theta_fem[1]) }
+ncgamma1_fem <- integrate(prevalencegamma, lower = 0.1, upper = 150)$value  # Corrected lower bound to 0.1
+
+# Define the normalized prevalence function
+prevgamma <- function(x) {
+  (1 - (p_abs_fem[1] + p_form_fem[1])) * (1 / ncgamma1_fem) * dgamma(x, shape = k_fem[1], scale = theta_fem[1])
+}
+
+# Check the integral of the normalized function
+integrated_value <- integrate(prevgamma, lower = 0.1, upper = 150)$value
+print(integrated_value$value) 
+
+risk <- function(x){
+  exp(x*b1_bcan)
+}
+integral <- function(x){
+  prevgamma(x)*risk(x)
+}
+integral_gamma<- integrate(integral, lower = 0, upper = 150)$value
+# Implementing the formula for AAF
+numerator <- (p_form_fem[1] * (rr_bcan_fd - 1)) + integral_gamma
+denominator <- numerator + 1
+AAFgammafem <- numerator / denominator
+
+AAFgammafem

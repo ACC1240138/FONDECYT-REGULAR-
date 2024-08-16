@@ -156,6 +156,7 @@ var_lri <- 0.19220552^2
 # LIP AND ORAL CAVITY CANCER
 b1_locan <- 0.02474
 b2_locan <- -0.00004
+rr_locan_fd <- 1.2
 # Variance-covariance matrix:
 # Variance (b1): 0.000002953
 # Variance (b2): 0.000000000102
@@ -164,6 +165,7 @@ b2_locan <- -0.00004
 # Other Pharyngeal Cancers
 b1_opcan <- 0.02474
 b2_opcan <- -0.00004
+rr_opcan_fd <- 1.2
 # Variance-covariance matrix:
 # Variance (b1): 0.000002953
 # Variance (b2): 0.000000000102
@@ -172,6 +174,7 @@ b2_opcan <- -0.00004
 # Oesophagus Cancer
 b1_oescan <- 0.0132063596418668
 b2_oescan <- -4.14801974664481*10^-08
+rr_oescan_fd <- 1.16
 # Variance-covariance matrix:
 # Variance (b1): 1.525706*10^-07
 # Variance (b2): 0.000002953
@@ -284,10 +287,10 @@ b2_ihd_35_fem = 1.832441
 b3_ihd_35_fem = 1.538557
 b4_ihd_35_fem = 0.01
 
-####### CATEGORICAL VERSION
-table(data$cvolaj)
-capped_data <- data %>% 
-  mutate(volajohdia = ifelse(volajohdia > 150,150, volajohdia)) %>% 
+###############################################
+# CONTINOUS VERSION USING GAMMA DISTRIBUTION #
+###############################################
+data_input <- data %>% 
   mutate(edad_tramo = case_when(between(edad, 15, 29)~1,
                                 between(edad, 30,44)~2,
                                 between(edad,45,59)~3,
@@ -302,7 +305,297 @@ capped_data <- data %>%
                             sexo == "Hombre" & volajohdia >= 40 & volajohdia <= 59.99 ~ "cat2",
                             sexo == "Hombre" & volajohdia >= 60 & volajohdia<= 100 ~ "cat3",
                             sexo == "Hombre" & volajohdia > 100 ~ "cat4",
-                            TRUE ~ NA))
+                            TRUE ~ NA)) %>% 
+  dplyr::select(sexo, exp, edad_tramo, volajohdia, cvolaj)
+
+# WE NEED THE PROPORTION OF MALES AND FEMALES IN POPULATION FOR POOLED PAF
+input <- data_input %>% 
+  filter(!is.na(cvolaj)) %>% 
+  group_by(sexo, edad_tramo, cvolaj) %>% 
+  summarise(weighted_count = sum(exp, na.rm = TRUE)) %>% 
+  mutate(prop = round(weighted_count / sum(weighted_count), 2))
+
+props <- data_input %>% 
+  filter(!is.na(cvolaj)) %>% 
+  group_by(sexo, edad_tramo) %>% 
+  summarise(weighted_count = sum(exp, na.rm = TRUE)) %>% 
+  mutate(prop = round(weighted_count / sum(weighted_count), 2))
+
+
+
+p_abs_male1 <- sum(input[6,5])
+p_abs_male2 <- sum(input[12,5])
+p_abs_male3 <- sum(input[18,5])
+p_abs_male4 <- sum(input[24,5])
+p_abs_male <- c(p_abs_male1,p_abs_male2, p_abs_male3, p_abs_male4)
+p_form_male1 <- sum(input[5,5])
+p_form_male2 <- sum(input[11,5])
+p_form_male3 <- sum(input[17,5])
+p_form_male4 <- sum(input[23,5])
+p_form_male <- c(p_form_male1, p_form_male2, p_form_male3, p_form_male4)
+p_abs_fem1 <- sum(input[30,5])
+p_abs_fem2 <- sum(input[36,5])
+p_abs_fem3 <- sum(input[42,5])
+p_abs_fem4 <- sum(input[48,5])
+p_abs_fem <- c(p_abs_fem1,p_abs_fem2,p_abs_fem3,p_abs_fem4)
+p_form_fem1 <- sum(input[29,5])
+p_form_fem2 <- sum(input[35,5])
+p_form_fem3 <- sum(input[41,5])
+p_form_fem4 <- sum(input[47,5])
+p_form_fem <- c(p_form_fem1,p_form_fem2,p_form_fem3,p_form_fem4)
+
+x_vals <- seq(0.1, 150, length.out = 1500)
+
+cd_fem1 <- data_input %>% 
+  filter(volajohdia > 0, sexo == "Mujer", edad_tramo == 1) %>%
+  pull(volajohdia)
+cd_fem2 <- data_input %>% 
+  filter(volajohdia > 0, sexo == "Mujer", edad_tramo == 2) %>%
+  pull(volajohdia)
+cd_fem3 <- data_input %>% 
+  filter(volajohdia > 0, sexo == "Mujer", edad_tramo == 3) %>%
+  pull(volajohdia)
+cd_fem4 <- data_input %>% 
+  filter(volajohdia > 0, sexo == "Mujer", edad_tramo == 4) %>%
+  pull(volajohdia)
+
+gamma_fem1 <- fitdist(cd_fem1, "gamma")
+gamma_fem2 <- fitdist(cd_fem2, "gamma")
+gamma_fem3 <- fitdist(cd_fem3, "gamma")
+gamma_fem4 <- fitdist(cd_fem4, "gamma")
+y_gamma_fem1 <- dgamma(x_vals, shape = gamma_fem1$estimate["shape"],
+                       rate = gamma_fem1$estimate["rate"])
+y_gamma_fem2 <- dgamma(x_vals, shape = gamma_fem2$estimate["shape"],
+                       rate = gamma_fem2$estimate["rate"])
+y_gamma_fem3 <- dgamma(x_vals, shape = gamma_fem3$estimate["shape"],
+                       rate = gamma_fem3$estimate["rate"])
+y_gamma_fem4 <- dgamma(x_vals, shape = gamma_fem4$estimate["shape"],
+                       rate = gamma_fem4$estimate["rate"])
+
+#
+cd_male1 <- data_input %>% 
+  filter(volajohdia > 0, sexo == "Hombre", edad_tramo == 1) %>%
+  pull(volajohdia)
+cd_male2 <- data_input %>% 
+  filter(volajohdia > 0, sexo == "Hombre", edad_tramo == 2) %>%
+  pull(volajohdia)
+cd_male3 <- data_input %>% 
+  filter(volajohdia > 0, sexo == "Hombre", edad_tramo == 3) %>%
+  pull(volajohdia)
+cd_male4 <- data_input %>% 
+  filter(volajohdia > 0, sexo == "Hombre", edad_tramo == 4) %>%
+  pull(volajohdia)
+gamma_male1 <- fitdist(cd_male1, "gamma")
+gamma_male2 <- fitdist(cd_male2, "gamma")
+gamma_male3 <- fitdist(cd_male3, "gamma")
+gamma_male4 <- fitdist(cd_male4, "gamma")
+y_gamma_male1 <- dgamma(x_vals, shape = gamma_male1$estimate["shape"],
+                        rate = gamma_male1$estimate["rate"])
+y_gamma_male2 <- dgamma(x_vals, shape = gamma_male2$estimate["shape"],
+                        rate = gamma_male2$estimate["rate"])
+y_gamma_male3 <- dgamma(x_vals, shape = gamma_male3$estimate["shape"],
+                        rate = gamma_male3$estimate["rate"])
+y_gamma_male4 <- dgamma(x_vals, shape = gamma_male4$estimate["shape"],
+                        rate = gamma_male4$estimate["rate"])
+
+# TRAPEZOIDAL INTEGRATION FUNCTION
+trap_int <- function(x, y, rr, prop_abs, rr_form, prop_form) {
+  
+  # Interval width
+  dx <- x[2] - x[1]
+  ncgamma <- sum(y[-1] + y[-length(x)]) * dx / 2
+  # Normalize the gamma function
+  normalized_y <- (1 -  (prop_abs+prop_form)) * y/ncgamma
+  
+  # Calculate the excess relative risk
+  excess_rr <- rr - 1
+  
+  # Calculate the weighted excess relative risk
+  weighted_excess_rr <- normalized_y * excess_rr
+  
+  # Apply the trapezoidal rule to calculate the numerator
+  numerator <- (rr_form-1)*prop_form+sum((weighted_excess_rr[-1] + weighted_excess_rr[-length(x)]) / 2) * dx
+  
+  # Calculate the denominator
+  denominator <- numerator + 1
+  
+  # Calculate PAF
+  paf <- round(numerator / denominator, 2)
+  
+  return(paf)
+}
+
+# LINEAR RELATIVE RISK FUNCTION
+rr_linear <- function(x, b){
+  exp(x*b)
+}
+
+# FUNCTION FOR POOLED BY SEX
+paf_pool <- function(paf1, paf2, paf3, paf4, sexo) {
+  if (sexo == "Mujer") {
+    return(paf1 * 0.3 + paf2 * 0.3 + paf3 * 0.29 + paf4 * 0.11)
+  } else {
+    return(paf1 * 0.36 + paf2 * 0.28 + paf3 * 0.29 + paf4 * 0.09)
+  }
+}
+# FUNCTION FOR OVERALL PAF
+paf_overall <- function(paf_fem, paf_male){
+  paf_fem*0.42+paf_male*0.58
+}
+####################################
+# ESTIMATING AAF FOR BREAST CANCER #
+####################################
+
+# Calculate the relative risk for each x
+rr_bcan <- rr_linear(x_vals, b1_bcan)
+
+paf_bc1 <- trap_int(x = x_vals, y = y_gamma_fem1, rr = rr_bcan, prop_abs = p_abs_fem1,rr_form = 1, prop_form = p_form_fem1)
+paf_bc2 <- trap_int(x = x_vals, y = y_gamma_fem2, rr = rr_bcan, prop_abs = p_abs_fem2,rr_form = 1,prop_form = p_form_fem2)
+paf_bc3 <- trap_int(x = x_vals, y = y_gamma_fem3, rr = rr_bcan, prop_abs = p_abs_fem3,rr_form = 1,prop_form = p_form_fem3)
+paf_bc4 <- trap_int(x = x_vals, y = y_gamma_fem4, rr = rr_bcan, prop_abs = p_abs_fem4,rr_form = 1,prop_form = p_form_fem4)
+paf_bc <- paf_pool(paf_bc1,paf_bc2,paf_bc3,paf_bc4,"Mujer")
+
+# Estimate mean and variance of the PCA from the gamma distribution
+mean_pca <- shape_fem1 / rate_fem1
+var_pca <- shape_fem1 / (rate_fem1^2)
+
+# Simulation parameters
+set.seed(1232)
+n_sim <- 1000
+beta_breast_cancer <- 0.0179695  # Example beta coefficient for breast cancer
+var_beta_breast_cancer <- 0.0072152^2  # Variance of the beta coefficient
+
+# Simulate PCA, proportions of abstainers and former drinkers
+simulated_pafs <- numeric(n_sim)
+
+for (i in 1:n_sim) {
+  # Simulate PCA using rnorm
+  pca_sim <- rnorm(1, mean = mean_pca, sd = sqrt(var_pca))
+  
+  # Simulate proportions of lifetime abstainers and former drinkers using rnorm
+  prop_abs <- rnorm(1, mean = p_abs_fem1, sd = sqrt(p_abs_fem1 * (1 - p_abs_fem1) / 1000)) # Example proportion
+  prop_form <- rnorm(1, mean = p_form_fem1, sd = sqrt(p_form_fem1 * (1 - p_form_fem1) / 1000)) # Example proportion
+  
+  # Simulate shape and rate parameters (assuming some uncertainty)
+  shape_sim <- rgamma(1, shape = shape_fem1, rate = rate_fem1)
+  rate_sim <- rgamma(1, shape = shape_fem1, rate = rate_fem1)
+  
+  # Simulate beta coefficient
+  beta_sim <- rnorm(1, mean = beta_breast_cancer, sd = sqrt(var_beta_breast_cancer))
+  
+  # Define the relative risk function
+  rr_function <- function(x) {
+    exp(beta_sim * x)
+  }
+  
+  # Calculate the Gamma density for each x value
+  x_vals <- seq(1, 150, length.out = 1000)
+  y_gamma_sim <- dgamma(x_vals, shape = shape_sim, rate = rate_sim)
+  
+  # Calculate the PAF using the trapezoidal method
+  simulated_pafs[i] <- trap_int(x = x_vals, y = y_gamma_sim, rr = rr_function(x_vals), 
+                                prop_abs = prop_abs, rr_form = 1, prop_form = prop_form)
+}
+
+# Calculate the 95% confidence interval
+paf_lower <- quantile(simulated_pafs, 0.025)
+paf_upper <- quantile(simulated_pafs, 0.975)
+paf_point_estimate <- mean(simulated_pafs)
+
+list(
+  Point_Estimate = paf_point_estimate,
+  Lower_CI = paf_lower,
+  Upper_CI = paf_upper
+)
+
+####################################
+# ESTIMATING AAF FOR TUBERCULOSIS  #
+####################################
+rr_tb <- rr_linear(x_vals, b_tb)
+paf_tb_fem1 <- trap_int(x = x_vals, y = y_gamma_fem1, rr = rr_tb, prop_abs = p_abs_fem1,rr_form = 1, prop_form = p_form_fem1)
+paf_tb_fem2 <- trap_int(x = x_vals, y = y_gamma_fem2, rr = rr_tb, prop_abs = p_abs_fem2,rr_form = 1, prop_form = p_form_fem2)
+paf_tb_fem3 <- trap_int(x = x_vals, y = y_gamma_fem3, rr = rr_tb, prop_abs = p_abs_fem3,rr_form = 1, prop_form = p_form_fem3)
+paf_tb_fem4 <- trap_int(x = x_vals, y = y_gamma_fem4, rr = rr_tb, prop_abs = p_abs_fem4,rr_form = 1, prop_form = p_form_fem4)
+paf_tb_fem <- paf_pool(paf_tb_fem1,paf_tb_fem2,paf_tb_fem3,paf_tb_fem4,"Mujer")
+
+paf_tb_male1 <- trap_int(x = x_vals, y = y_gamma_male1, rr = rr_tb, prop_abs = p_abs_male1,rr_form = 1, prop_form = p_form_male1)
+paf_tb_male2 <- trap_int(x = x_vals, y = y_gamma_male2, rr = rr_tb, prop_abs = p_abs_male2,rr_form = 1, prop_form = p_form_male2)
+paf_tb_male3 <- trap_int(x = x_vals, y = y_gamma_male3, rr = rr_tb, prop_abs = p_abs_male3,rr_form = 1, prop_form = p_form_male3)
+paf_tb_male4 <- trap_int(x = x_vals, y = y_gamma_male4, rr = rr_tb, prop_abs = p_abs_male4,rr_form = 1, prop_form = p_form_male4)
+paf_tb_male <- paf_pool(paf_tb_male1,paf_tb_male2,paf_tb_male3,paf_tb_male4,"Hombre")
+paf_tb <- paf_overall(paf_tb_fem, paf_tb_male)
+
+################################################
+# ESTIMATING AAF FOR OTHER PHARINGEAL CANCER   #
+################################################
+rr_opcan_cal <- function(b1,b2,x){
+  exp(b1*x+b2*x**2)
+}
+rr_opcan <- rr_opcan_cal(b1_opcan, b2_opcan, x_vals)
+
+paf_opcan_fem1 <- trap_int(x = x_vals, y = y_gamma_fem1, rr = rr_opcan, prop_abs = p_abs_fem1,rr_form = rr_opcan_fd, prop_form = p_form_fem1)
+paf_opcan_fem2 <- trap_int(x = x_vals, y = y_gamma_fem2, rr = rr_opcan, prop_abs = p_abs_fem2,rr_form = rr_opcan_fd, prop_form = p_form_fem2)
+paf_opcan_fem3 <- trap_int(x = x_vals, y = y_gamma_fem3, rr = rr_opcan, prop_abs = p_abs_fem3,rr_form = rr_opcan_fd, prop_form = p_form_fem3)
+paf_opcan_fem4 <- trap_int(x = x_vals, y = y_gamma_fem4, rr = rr_opcan, prop_abs = p_abs_fem4,rr_form = rr_opcan_fd, prop_form = p_form_fem4)
+paf_opcan_fem <- paf_pool(paf_opcan_fem1,paf_opcan_fem2,paf_opcan_fem3,paf_opcan_fem4, "Mujer")
+
+paf_opcan_male1 <- trap_int(x = x_vals, y = y_gamma_male1, rr = rr_opcan, prop_abs = p_abs_male1,rr_form = rr_opcan_fd, prop_form = p_form_male1)
+paf_opcan_male2 <- trap_int(x = x_vals, y = y_gamma_male2, rr = rr_opcan, prop_abs = p_abs_male2,rr_form = rr_opcan_fd, prop_form = p_form_male2)
+paf_opcan_male3 <- trap_int(x = x_vals, y = y_gamma_male3, rr = rr_opcan, prop_abs = p_abs_male3,rr_form = rr_opcan_fd, prop_form = p_form_male3)
+paf_opcan_male4 <- trap_int(x = x_vals, y = y_gamma_male4, rr = rr_opcan, prop_abs = p_abs_male4,rr_form = rr_opcan_fd, prop_form = p_form_male4)
+paf_opcan_male <- paf_pool(paf_opcan_male1,paf_opcan_male2,paf_opcan_male3,paf_opcan_male4, "Hombre")
+paf_opcan <- paf_overall(paf_opcan_fem, paf_opcan_male)
+
+##########################################
+# ESTIMATING AAF FOR OESOPHAFUS CANCER   #
+##########################################
+rr_oescan_cal <- function(b1,b2,x){
+  exp(b1*x+b2*x**3)
+}
+rr_oescan <- rr_oescan_cal(b1_oescan, b2_oescan, x_vals)
+paf_oescan_fem1 <- trap_int(x = x_vals, y = y_gamma_fem1, rr = rr_opcan, prop_abs = p_abs_fem1,rr_form = rr_oescan_fd, prop_form = p_form_fem1)
+paf_oescan_fem2 <- trap_int(x = x_vals, y = y_gamma_fem2, rr = rr_opcan, prop_abs = p_abs_fem2,rr_form = rr_oescan_fd, prop_form = p_form_fem2)
+paf_oescan_fem3 <- trap_int(x = x_vals, y = y_gamma_fem3, rr = rr_opcan, prop_abs = p_abs_fem3,rr_form = rr_oescan_fd, prop_form = p_form_fem3)
+paf_oescan_fem4 <- trap_int(x = x_vals, y = y_gamma_fem4, rr = rr_opcan, prop_abs = p_abs_fem4,rr_form = rr_oescan_fd, prop_form = p_form_fem4)
+paf_oescan_fem <- paf_pool(paf_oescan_fem1,paf_oescan_fem2,paf_oescan_fem3,paf_oescan_fem4, "Mujer")
+
+paf_oescan_male1 <- trap_int(x = x_vals, y = y_gamma_male1, rr = rr_opcan, prop_abs = p_abs_male1,rr_form = rr_oescan_fd, prop_form = p_form_male1)
+paf_oescan_male2 <- trap_int(x = x_vals, y = y_gamma_male2, rr = rr_opcan, prop_abs = p_abs_male2,rr_form = rr_oescan_fd, prop_form = p_form_male2)
+paf_oescan_male3 <- trap_int(x = x_vals, y = y_gamma_male3, rr = rr_opcan, prop_abs = p_abs_male3,rr_form = rr_oescan_fd, prop_form = p_form_male3)
+paf_oescan_male4 <- trap_int(x = x_vals, y = y_gamma_male4, rr = rr_opcan, prop_abs = p_abs_male4,rr_form = rr_oescan_fd, prop_form = p_form_male4)
+paf_oescan_male <- paf_pool(paf_oescan_male1,paf_oescan_male2,paf_oescan_male3,paf_oescan_male4, "Hombre")
+
+paf_oescan <- paf_overall(paf_oescan_fem,paf_oescan_male)
+
+################################################
+# ESTIMATING AAF FOR COLON AND RECTUM CANCER   #
+################################################
+rr_crcan_male <- rr_linear(b1_crcan_male, x_vals)
+rr_crcan_fem <- rr_linear(b1_crcan_fem, x_vals)
+paf_crcan_fem <- trap_int_fd(x_vals, y_gamma_fem, rr_crcan_fem, 1.05, 0.3)
+paf_crcan_male <- trap_int_fd(x_vals, y_gamma_male, rr_crcan_male, 2.19, 0.39)
+paf_crcan <- paf_crcan_fem * 0.42 + paf_crcan_male * 0.58
+
+######################################
+# ESTIMATING AAF FOR LIVER CANCER   #
+#####################################
+rr_lican_male <- rr_linear(b1_lican_male, x_vals)
+rr_lican_fem <- rr_linear(b1_lican_fem, x_vals)
+paf_lican_male <- trap_int_fd(x_vals, y_gamma_male, rr_lican_male, 2.23, 0.39)
+paf_lican_fem <- trap_int_fd(x_vals, y_gamma_fem, rr_lican_fem, 2.68, 0.3)
+paf_lican <- paf_lican_fem * 0.42 + paf_lican_male * 0.58
+
+######################################
+# ESTIMATING AAF FOR LARYNX CANCER   #
+#####################################
+rr_lxcan <- rr_linear(b1_lxcan, x_vals)
+paf_lxcan_male <- trap_int(x_vals, y_gamma_male, rr_lxcan)
+paf_lxcan_fem <- trap_int(x_vals, y_gamma_fem, rr_lxcan)
+paf_lxcan <- paf_lxcan_fem * 0.42 + paf_lxcan_male * 0.58
+
+####### CATEGORICAL VERSION
+table(data$cvolaj)
+
 
 # STRATIFIED CONSUMPTION LEVEL
 oh_level_median <- capped_data %>% 
@@ -824,153 +1117,3 @@ ihd_15_fem <- capped_data %>%
 
 
 
-###############################################
-# CONTINOUS VERSION USING GAMMA DISTRIBUTION #
-###############################################
-
-cd_male <- data %>% 
-  filter(sexo == "Hombre", volajohdia > 0) %>% 
-  pull(volajohdia)
-
-cd_fem <- data %>% 
-  filter(sexo == "Mujer", volajohdia > 0) %>% 
-  pull(volajohdia)
-
-x_vals <- seq(0.1, 150, length.out = 150000)
-
-gamma_male <- fitdist(cd_male, "gamma")
-gamma_fem <- fitdist(cd_fem, "gamma")
-
-y_gamma_male <- dgamma(x_vals, shape = gamma_male$estimate["shape"],
-                       rate = gamma_male$estimate["rate"])
-y_gamma_fem <- dgamma(x_vals, shape = gamma_fem$estimate["shape"],
-                      rate = gamma_fem$estimate["rate"])
-hist(y_gamma_male)
-hist(y_gamma_fem)
-
-# WE NEED THE PROPORTION OF MALES AND FEMALES IN POPULATION FOR POOLED PAF
-capped_data %>% 
-  filter(!is.na(cvolaj)) %>% 
-  group_by(sexo, cvolaj) %>% 
-  summarise(weighted_count = sum(exp, na.rm = TRUE)) %>% 
-  mutate(prop = round(weighted_count / sum(weighted_count), 2))
-# 16% male
-# 24% female
-
-trap_int <- function(x, y, rr, sexo) {
-  # Adjust y based on the proportion of drinkers by sexo
-  if (sexo == "Hombre") {
-    y <- y * (1 - 0.16)  # 16% abstainers for males
-  } else if (sexo == "Mujer") {
-    y <- y * (1 - 0.24)  # 24% abstainers for females
-  }
-  
-  dx <- x[2] - x[1]  # Interval width
-  excess_rr <- rr - 1
-  
-  # Calculate the weighted excess relative risk
-  weighted_excess_rr <- y * excess_rr
-  
-  # Apply the trapezoidal rule
-  numerator <- sum((weighted_excess_rr[-1] + weighted_excess_rr[-length(x)]) / 2) * dx
-  
-  # Calculate the denominator
-  denominator <- numerator + 1
-  
-  # Calculate PAF
-  paf <- round(numerator / denominator, 2)
-  
-  return(paf)
-}
-
-####################################
-# ESTIMATING AAF FOR BREAST CANCER #
-####################################
-
-# Calculate the relative risk for each x
-rr_bcan <- rr_linear(x_vals, b1_bcan)
-
-trap_int(x_vals, y_gamma_fem, rr_bcan, "Mujer")
-
-####################################
-# ESTIMATING AAF FOR TUBERCULOSIS  #
-####################################
-rr_tb <- rr_linear(x_vals, b1_bcan)
-paf_tb_fem <- trap_int(x_vals, y_gamma_fem, rr_tb)
-paf_tb_male <- trap_int(x_vals, y_gamma_male,rr_tb)
-paf_tb <- paf_tb_fem * 0.42 + paf_tb_male *0.58
-y_gamma_male
-
-################################################
-# ESTIMATING AAF FOR OTHER PHARINGEAL CANCER   #
-################################################
-trap_int_fd <- function(x, y, rr, rr_fd, prop_fd) {
-  dx <- x[2] - x[1]  # Interval width
-  excess_rr <- rr - 1
-  
-  # Calculate the weighted excess relative risk
-  weighted_excess_rr <- y * excess_rr
-  
-  # Apply the trapezoidal rule
-  numerator <- (rr_fd-1)*prop_fd+sum((weighted_excess_rr[-1] + weighted_excess_rr[-length(x)]) / 2) * dx
-  
-  # Calculate the denominator
-  denominator <- (rr_fd-1)*prop_fd + (numerator + 1)
-  
-  # Calculate PAF
-  paf <- round(numerator / denominator,2)
-  return(paf)
-}
-
-rr_opcan_cal <- function(b1,b2,x){
-  exp(b1*x+b2*x**2)
-}
-rr_opcan <- rr_opcan_cal(b1_opcan, b2_opcan, x_vals)
-
-capped_data %>% 
-  filter(!is.na(cvolaj)) %>% 
-  group_by(sexo,cvolaj) %>% 
-  summarise(weighted_count = sum(exp, na.rm = TRUE)) %>% 
-  group_by(sexo) %>% 
-  mutate(prop = round(weighted_count / sum(weighted_count), 2))
-
-paf_opcan_fem <- trap_int_fd(x_vals, y_gamma_fem, rr_opcan, 1.2, 0.39)
-paf_opcan_male <- trap_int_fd(x_vals, y_gamma_male, rr_opcan, 1.2, 0.3)
-paf_opcan <- paf_opcan_fem *0.42 + paf_opcan_male * 0.58
-
-##########################################
-# ESTIMATING AAF FOR OESOPHAFUS CANCER   #
-##########################################
-rr_oescan_cal <- function(b1,b2,x){
-  exp(b1*x+b2*x**3)
-}
-rr_oescan <- rr_oescan_cal(b1_oescan, b2_oescan, x_vals)
-paf_oescan_fem <- trap_int_fd(x_vals, y_gamma_fem, rr_oescan, 1.16, 0.3)
-paf_oescan_male <- trap_int_fd(x_vals, y_gamma_male, rr_oescan, 1.16, 0.39)
-paf_oescan <- paf_oescan_fem *0.42 + paf_oescan_male * 0.58
-
-################################################
-# ESTIMATING AAF FOR COLON AND RECTUM CANCER   #
-################################################
-rr_crcan_male <- rr_linear(b1_crcan_male, x_vals)
-rr_crcan_fem <- rr_linear(b1_crcan_fem, x_vals)
-paf_crcan_fem <- trap_int_fd(x_vals, y_gamma_fem, rr_crcan_fem, 1.05, 0.3)
-paf_crcan_male <- trap_int_fd(x_vals, y_gamma_male, rr_crcan_male, 2.19, 0.39)
-paf_crcan <- paf_crcan_fem * 0.42 + paf_crcan_male * 0.58
-
-######################################
-# ESTIMATING AAF FOR LIVER CANCER   #
-#####################################
-rr_lican_male <- rr_linear(b1_lican_male, x_vals)
-rr_lican_fem <- rr_linear(b1_lican_fem, x_vals)
-paf_lican_male <- trap_int_fd(x_vals, y_gamma_male, rr_lican_male, 2.23, 0.39)
-paf_lican_fem <- trap_int_fd(x_vals, y_gamma_fem, rr_lican_fem, 2.68, 0.3)
-paf_lican <- paf_lican_fem * 0.42 + paf_lican_male * 0.58
-
-######################################
-# ESTIMATING AAF FOR LARYNX CANCER   #
-#####################################
-rr_lxcan <- rr_linear(b1_lxcan, x_vals)
-paf_lxcan_male <- trap_int(x_vals, y_gamma_male, rr_lxcan)
-paf_lxcan_fem <- trap_int(x_vals, y_gamma_fem, rr_lxcan)
-paf_lxcan <- paf_lxcan_fem * 0.42 + paf_lxcan_male * 0.58
