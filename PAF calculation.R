@@ -420,7 +420,7 @@ trap_int <- function(x, y, rr, prop_abs, rr_form, prop_form) {
   denominator <- numerator + 1
   
   # Calculate PAF
-  paf <- round(numerator / denominator, 2)
+  paf <- round(numerator / denominator, 3)
   
   return(paf)
 }
@@ -455,47 +455,54 @@ paf_bc3 <- trap_int(x = x_vals, y = y_gamma_fem3, rr = rr_bcan, prop_abs = p_abs
 paf_bc4 <- trap_int(x = x_vals, y = y_gamma_fem4, rr = rr_bcan, prop_abs = p_abs_fem4,rr_form = 1,prop_form = p_form_fem4)
 paf_bc <- paf_pool(paf_bc1,paf_bc2,paf_bc3,paf_bc4,"Mujer")
 
-# Estimate mean and variance of the PCA from the gamma distribution
-mean_pca <- shape_fem1 / rate_fem1
-var_pca <- shape_fem1 / (rate_fem1^2)
-
 # Simulation parameters
-set.seed(1232)
-n_sim <- 1000
-beta_breast_cancer <- 0.0179695  # Example beta coefficient for breast cancer
-var_beta_breast_cancer <- 0.0072152^2  # Variance of the beta coefficient
-
+set.seed(145)
 # Simulate PCA, proportions of abstainers and former drinkers
+# Assuming the same setup as before
+n_sim <- 10000
+
+# Pre-allocate a vector for the simulated PAFs
 simulated_pafs <- numeric(n_sim)
 
 for (i in 1:n_sim) {
-  # Simulate PCA using rnorm
-  pca_sim <- rnorm(1, mean = mean_pca, sd = sqrt(var_pca))
   
-  # Simulate proportions of lifetime abstainers and former drinkers using rnorm
-  prop_abs <- rnorm(1, mean = p_abs_fem1, sd = sqrt(p_abs_fem1 * (1 - p_abs_fem1) / 1000)) # Example proportion
-  prop_form <- rnorm(1, mean = p_form_fem1, sd = sqrt(p_form_fem1 * (1 - p_form_fem1) / 1000)) # Example proportion
+  # Simulate PCA mean and SD, ensuring positivity
+  pca_sim <- rnorm(1000, mean = mean_pca, sd = sqrt(var_pca))
   
-  # Simulate shape and rate parameters (assuming some uncertainty)
-  shape_sim <- rgamma(1, shape = shape_fem1, rate = rate_fem1)
-  rate_sim <- rgamma(1, shape = shape_fem1, rate = rate_fem1)
+  # Replace any non-positive values with a small positive value
+  pca_sim[pca_sim <= 0] <- 0.001
+  
+  # Calculate the simulated mean and standard deviation
+  mean_sim <- mean(pca_sim)
+  sd_sim <- sqrt(pca_sim)
+  
+  # Calculate shape and rate parameters for the gamma distribution
+  shape_sim <- (mean_sim / sd_sim)^2
+  rate_sim <- mean_sim / (sd_sim^2)
+  
+  # Simulate the gamma distribution based on these parameters
+  y_gamma_sim <- dgamma(x_vals, shape = shape_sim, rate = rate_sim)
+  
+  # Skip iteration if y_gamma_sim contains NaN values
+  if (any(is.nan(y_gamma_sim))) next
   
   # Simulate beta coefficient
-  beta_sim <- rnorm(1, mean = beta_breast_cancer, sd = sqrt(var_beta_breast_cancer))
+  beta_sim <- rnorm(1000, mean = b1_bcan, sd = sqrt(var_bcan))
   
   # Define the relative risk function
   rr_function <- function(x) {
     exp(beta_sim * x)
   }
-  
-  # Calculate the Gamma density for each x value
-  x_vals <- seq(1, 150, length.out = 1000)
-  y_gamma_sim <- dgamma(x_vals, shape = shape_sim, rate = rate_sim)
+  prop_abs_sim <- rnorm(1000, mean = p_abs_fem1, sd = sqrt(p_abs_fem1 * (1 - p_abs_fem1) / 1000))
+  prop_form_sim <- rnorm(1000, mean = p_form_fem1, sd = sqrt(p_form_fem1 * (1 - p_form_fem1) / 1000))
   
   # Calculate the PAF using the trapezoidal method
   simulated_pafs[i] <- trap_int(x = x_vals, y = y_gamma_sim, rr = rr_function(x_vals), 
-                                prop_abs = prop_abs, rr_form = 1, prop_form = prop_form)
+                                prop_abs = prop_abs_sim, rr_form = 1, prop_form = prop_form_sim)
 }
+
+# Remove NaN values from simulated PAFs
+simulated_pafs <- simulated_pafs[!is.nan(simulated_pafs)]
 
 # Calculate the 95% confidence interval
 paf_lower <- quantile(simulated_pafs, 0.025)
@@ -503,10 +510,80 @@ paf_upper <- quantile(simulated_pafs, 0.975)
 paf_point_estimate <- mean(simulated_pafs)
 
 list(
-  Point_Estimate = paf_point_estimate,
+  Point_Estimate = round(paf_point_estimate,3),
   Lower_CI = paf_lower,
   Upper_CI = paf_upper
 )
+
+# Define the number of simulations
+n_sim <- 10000
+
+# Pre-allocate a matrix for the simulated PAFs (rows: simulations, columns: age categories)
+simulated_pafs <- matrix(NA, nrow = n_sim, ncol = 4)
+
+# Define age categories data
+cd_fem_list <- list(cd_fem1, cd_fem2, cd_fem3, cd_fem4)
+mean_pca_list <- sapply(list(cd_fem1, cd_fem2, cd_fem3, cd_fem4), mean)
+var_pca_list <- sapply(list(cd_fem1, cd_fem2, cd_fem3, cd_fem4), var)
+
+# Define the corresponding abstainer and former drinker proportions for each age category
+p_abs_fem_list <- c(p_abs_fem1, p_abs_fem2, p_abs_fem3, p_abs_fem4)
+p_form_fem_list <- c(p_form_fem1, p_form_fem2, p_form_fem3, p_form_fem4)
+
+# Pre-allocate a matrix for the simulated PAFs (rows: simulations, columns: age categories)
+simulated_pafs <- matrix(NA, nrow = n_sim, ncol = 4)
+
+# Loop over each age category
+for (age_cat in 1:4) {
+  
+  # Extract the relevant data for the current age category
+  cd_fem <- cd_fem_list[[age_cat]]
+  
+  # Simulate PCA mean and SD, ensuring positivity
+  pca_sim <- rnorm(1000, mean = mean_pca_list[age_cat], sd = sqrt(var_pca_list[age_cat]))
+  pca_sim[pca_sim <= 0] <- 0.001
+  
+  # Calculate shape and rate parameters for the gamma distribution
+  shape_sim <- (mean(pca_sim) / sd(pca_sim))^2
+  rate_sim <- mean(pca_sim) / (sd(pca_sim)^2)
+  
+  # Simulate the gamma distribution based on these parameters
+  y_gamma_sim <- dgamma(x_vals, shape = shape_sim, rate = rate_sim)
+  
+  # Skip iteration if y_gamma_sim contains NaN values
+  if (any(is.nan(y_gamma_sim))) next
+  
+  # Simulate proportions of lifetime abstainers and former drinkers for the current age category
+  prop_abs_sim <- rnorm(1, mean = p_abs_fem_list[age_cat], sd = sqrt(p_abs_fem_list[age_cat] * (1 - p_abs_fem_list[age_cat]) / 1000))
+  prop_form_sim <- rnorm(1, mean = p_form_fem_list[age_cat], sd = sqrt(p_form_fem_list[age_cat] * (1 - p_form_fem_list[age_cat]) / 1000))
+  
+  # Perform simulations for the current age category
+  for (i in 1:n_sim) {
+    
+    # Simulate beta coefficient
+    beta_sim <- rnorm(1000, mean = b1_bcan, sd = sqrt(var_bcan))
+    
+    # Define the relative risk function
+    rr_function <- function(x) {
+      exp(beta_sim * x)
+    }
+    
+    # Calculate the PAF using the trapezoidal method
+    simulated_pafs[i, age_cat] <- trap_int(x = x_vals, y = y_gamma_sim, rr = rr_function(x_vals), 
+                                           prop_abs = prop_abs_sim, rr_form = 1, prop_form = prop_form_sim)
+  }
+}
+
+# Calculate the point estimate and 95% confidence intervals for each age category
+paf_results <- data.frame(
+  Age_Category = 1:4,
+  Point_Estimate = apply(simulated_pafs, 2, mean, na.rm = TRUE),
+  Lower_CI = apply(simulated_pafs, 2, quantile, probs = 0.025, na.rm = TRUE),
+  Upper_CI = apply(simulated_pafs, 2, quantile, probs = 0.975, na.rm = TRUE)
+)
+
+# Print the results
+print(paf_results)
 
 ####################################
 # ESTIMATING AAF FOR TUBERCULOSIS  #

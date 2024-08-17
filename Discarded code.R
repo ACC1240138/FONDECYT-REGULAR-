@@ -535,6 +535,7 @@ r_p4_fem <- props[8]
 mean_fem <- compute_mu(p1_fem, p2_fem, p3_fem, p4_fem, r_p1_fem,r_p2_fem, r_p3_fem, r_p4_fem,
                        p_abs_fem1, p_abs_fem2, p_abs_fem3, p_abs_fem4, p_form_fem1, p_form_fem2, p_form_fem3,
                        p_form_fem4, pca_fem)
+
 sd_fem = 1.171*mean_fem
 k_fem = mean_fem^2/sd_fem^2
 theta_fem = sd_fem^2/mean_fem
@@ -607,3 +608,92 @@ denominator <- numerator + 1
 AAFgammafem <- numerator / denominator
 
 AAFgammafem
+
+mean_fem <- compute_mu(p1_fem, p2_fem, p3_fem, p4_fem, r_p1_fem,r_p2_fem, r_p3_fem, r_p4_fem,
+                       p_abs_fem1, p_abs_fem2, p_abs_fem3, p_abs_fem4, p_form_fem1, p_form_fem2, p_form_fem3,
+                       p_form_fem4, pca_fem)
+compute_mu <- function(p1, p2, p3, p4, a, b, c, d, 
+                       prop_abs1, prop_abs2, prop_abs3, prop_abs4, 
+                       prop_form1, prop_form2, prop_form3, prop_form4, 
+                       pca) {
+  # Calculate the number of current drinkers in each age group
+  drk1 <- p1 * (1 - prop_abs1 - prop_form1)
+  drk2 <- p2 * (1 - prop_abs2 - prop_form2)
+  drk3 <- p3 * (1 - prop_abs3 - prop_form3)
+  drk4 <- p4 * (1 - prop_abs4 - prop_form4)
+  
+  # Adjust per capita alcohol consumption for drinkers
+  pca_drinker <- pca * (p1 + p2 + p3 + p4) / (drk1 + drk2 + drk3 + drk4)
+  
+  # Compute the mean consumption for each age group
+  mu1 <- pca_drinker * (drk1 + drk2 + drk3 + drk4) / 
+    (drk1 + b/a * drk2 + c/a * drk3 + d/a * drk4)
+  mu2 <- b/a * mu1
+  mu3 <- c/a * mu1
+  mu4 <- d/a * mu1
+  mu <- c(mu1, mu2, mu3, mu4)
+  
+  return(mu)
+}
+
+
+# Simulate proportions of lifetime abstainers and former drinkers
+
+p1_fem <-  sum(input[25, 4], input[26, 4], input[27, 4], input[28, 4], input[29, 4],input[30, 4])
+p2_fem <- sum(input[31, 4], input[32, 4],input[33, 4], input[34, 4], input[35, 4], input[36, 4])
+p3_fem <- sum(input[37, 4], input[38, 4],input[39, 4], input[40, 4], input[41, 4], input[42, 4])
+p4_fem <- sum(input[43, 4], input[44, 4],input[45, 4], input[46, 4], input[47, 4], input[48, 4])
+r_p1_fem <- props[[5,4]]
+r_p2_fem <- props[[6,4]]
+r_p3_fem <- props[[7,4]]
+r_p4_fem <- props[[8,4]]
+
+
+set.seed(1232)
+n_sim <- 10000
+beta_breast_cancer <- 0.0179695  # Example beta coefficient for breast cancer
+var_beta_breast_cancer <- 0.0072152^2  # Variance of the beta coefficient
+
+# Simulate PCA, proportions of abstainers and former drinkers
+simulated_pafs <- numeric(n_sim)
+
+for (i in 1:n_sim) {
+  # Simulate proportions of lifetime abstainers and former drinkers using rnorm
+  prop_abs <- rnorm(1000, mean = p_abs_fem1, sd = sqrt(p_abs_fem1 * (1 - p_abs_fem1) / 1000)) # Example proportion
+  prop_form <- rnorm(1000, mean = p_form_fem1, sd = sqrt(p_form_fem1 * (1 - p_form_fem1) / 1000)) # Example proportion
+  
+  # Simulate PCA using rnorm
+  pca_sim <- rnorm(1000, mean = mean_pca, sd = sqrt(var_pca))
+  
+  # Simulate shape and rate parameters (assuming some uncertainty)
+  shape_sim <- rgamma(1000, shape = shape_fem1, rate = rate_fem1)
+  rate_sim <- rgamma(1000, shape = shape_fem1, rate = rate_fem1)
+  
+  # Simulate beta coefficient
+  beta_sim <- rnorm(1000, mean = beta_breast_cancer, sd = sqrt(var_beta_breast_cancer))
+  
+  # Define the relative risk function
+  rr_function <- function(x) {
+    exp(beta_sim * x)
+  }
+  
+  # Calculate the Gamma density for each x value
+  x_vals <- seq(0.1, 150, length.out = 1000)
+  y_gamma_sim <- dgamma(x_vals, shape = shape_sim, rate = rate_sim)
+  
+  # Calculate the PAF using the trapezoidal method
+  simulated_pafs[i] <- trap_int(x = x_vals, y = y_gamma_sim, rr = rr_function(x_vals), 
+                                prop_abs = prop_abs, rr_form = 1, prop_form = prop_form)
+}
+
+# Calculate the 95% confidence interval
+paf_lower <- quantile(simulated_pafs, 0.025)
+paf_upper <- quantile(simulated_pafs, 0.975)
+paf_point_estimate <- mean(simulated_pafs)
+
+list(
+  Point_Estimate = paf_point_estimate,
+  Lower_CI = paf_lower,
+  Upper_CI = paf_upper
+)
+
