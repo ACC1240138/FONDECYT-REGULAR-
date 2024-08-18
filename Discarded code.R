@@ -697,3 +697,114 @@ list(
   Upper_CI = paf_upper
 )
 
+cd_collapsed <- data %>% 
+  filter(volajohdia > 0) %>% 
+  mutate(volajohdia = ifelse(volajohdia > 150, 150, volajohdia)) %>% 
+  pull(volajohdia)
+
+cd_vector <- data %>% 
+  filter(volajohdia > 0) %>% 
+  pull(volajohdia)
+
+# Fit log-normal distribution
+fit_lognorm_col <- fitdist(cd_collapsed, "lnorm")
+x_vals <- seq(0.0001, 150, length.out = 150000)
+y_lnorm <- dlnorm(x_vals, meanlog = fit_lognorm_col$estimate["meanlog"],
+                  sdlog = fit_lognorm_col$estimate["sdlog"])
+
+p_lnorm <- ggplot(data.frame(x = x_vals, y = y_lnorm), aes(x = x, y = y)) +
+  geom_line(color = "blue") +
+  labs(title = "Fitted lnorm Distribution",
+       x = "Alcohol Consumption (grams per day)",
+       y = "Density") +
+  theme_minimal()
+
+# Fit gamma distribution
+fit_gamma_col <- fitdist(cd_collapsed, "gamma")
+
+y_gamma <- dgamma(x_vals, shape = fit_gamma_col$estimate["shape"], 
+                  rate = fit_gamma_col$estimate["rate"])
+sum(y_gamma)
+p_gamma <- ggplot(data.frame(x = x_vals, y = y_gamma), aes(x = x, y = y)) +
+  geom_line(color = "blue") +
+  labs(title = "Fitted Gamma Distribution",
+       x = "Alcohol Consumption (grams per day)",
+       y = "Density") +
+  theme_minimal()
+
+# Fit Weibull distribution
+fit_weibull_col <- fitdist(cd_collapsed, "weibull")
+
+y_weibull <- dweibull(x_vals, shape = fit_weibull_col$estimate["shape"], scale = fit_weibull_col$estimate["scale"])
+
+p_weibull <- ggplot(data.frame(x = x_vals, y = y_weibull), aes(x = x, y = y)) +
+  geom_line(color = "blue") +
+  labs(title = "Fitted Weibull Distribution",
+       x = "Alcohol Consumption (grams per day)",
+       y = "Density") +
+  theme_minimal()
+
+grid.arrange(p_lnorm, p_gamma, p_weibull, nrow = 3)
+
+# Q-Q Plot function
+create_qqcomp_ggplot <- function(fit_list, title) {
+  ggplot_fit <- qqcomp(fit_list, plotstyle = "ggplot")
+  ggplot_fit + 
+    ggtitle(title) +
+    theme(
+      plot.title = element_text(size = 16, face = "bold"),
+      axis.title = element_text(size = 14),
+      axis.text = element_text(size = 12),
+      legend.title = element_text(size = 14),
+      legend.text = element_text(size = 12)
+    ) +
+    labs(color = "Distribution")+
+    coord_cartesian(xlim = c(0, 150))
+}
+
+# Generate Q-Q plots for collapsed data
+qqplot_collapsed <- create_qqcomp_ggplot(list(fit_lognorm_col, fit_gamma_col, fit_weibull_col), "Q-Q Plot Comparison for Collapsed Data")
+
+
+# FUNCTION TO CALCULATE PAF USING PROPORTION OF FORMER DRINKERS 
+# THIS FUNCTION APPLIES FOR ANY DISEASE WITH A RR GIVEN BY exp(B1*X)
+# TUBERCULOSIS, PANCREATITIS, COLON AND RECTUM CANCER, LIVER CANCER, 
+# BREAST CANCER
+
+calculate_paf_fd <- function(beta_1, data, distribution, p_fd, rr_fd) {
+  
+  if (distribution == "lognorm") {
+    fit <- fitdist(data, "lnorm")
+    prevalence_function <- function(x) {
+      dlnorm(x, meanlog = fit$estimate["meanlog"], sdlog = fit$estimate["sdlog"])
+    }
+  } else if (distribution == "gamma") {
+    fit <- fitdist(data, "gamma")
+    prevalence_function <- function(x) {
+      dgamma(x, shape = fit$estimate["shape"], rate = fit$estimate["rate"])
+    }
+  } else if (distribution == "weibull") {
+    fit <- fitdist(data, "weibull")
+    prevalence_function <- function(x) {
+      dweibull(x, shape = fit$estimate["shape"], scale = fit$estimate["scale"])
+    }
+  } else {
+    stop("Unsupported distribution")
+  }
+  
+  rr_function <- function(x) {
+    exp(beta_1 * x)
+  }
+  
+  integrand <- function(x) {
+    prevalence_function(x) * (rr_function(x) - 1)
+  }
+  
+  integral_value <- integrate(integrand, lower = 0, upper = 150)$value
+  
+  numerator <- p_fd*(rr_fd-1)+integral_value
+  denominator <- p_fd*(rr_fd-1)+(integral_value + 1)
+  
+  paf <- numerator / denominator
+  
+}

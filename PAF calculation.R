@@ -7,7 +7,7 @@ rm(list = ls())
 gc()
 # List of required packages
 required_packages <- c("dplyr", "readr", "haven", 
-                       "ggplot2", "gridExtra", "fitdistrplus")
+                       "ggplot2", "gridExtra", "fitdistrplus", "MASS")
 
 # Install and load required packages
 sapply(required_packages, function(pkg) {
@@ -20,118 +20,7 @@ data <- readRDS("enpg_full.RDS") %>%
   filter(aux == 0) %>% 
   dplyr::select(-aux)
 
-cd_collapsed <- data %>% 
-  filter(volajohdia > 0) %>% 
-  mutate(volajohdia = ifelse(volajohdia > 150, 150, volajohdia)) %>% 
-  pull(volajohdia)
 
-cd_vector <- data %>% 
-  filter(volajohdia > 0) %>% 
-  pull(volajohdia)
-
-# Fit log-normal distribution
-fit_lognorm_col <- fitdist(cd_collapsed, "lnorm")
-x_vals <- seq(0.0001, 150, length.out = 150000)
-y_lnorm <- dlnorm(x_vals, meanlog = fit_lognorm_col$estimate["meanlog"],
-                  sdlog = fit_lognorm_col$estimate["sdlog"])
-
-p_lnorm <- ggplot(data.frame(x = x_vals, y = y_lnorm), aes(x = x, y = y)) +
-  geom_line(color = "blue") +
-  labs(title = "Fitted lnorm Distribution",
-       x = "Alcohol Consumption (grams per day)",
-       y = "Density") +
-  theme_minimal()
-
-# Fit gamma distribution
-fit_gamma_col <- fitdist(cd_collapsed, "gamma")
-
-y_gamma <- dgamma(x_vals, shape = fit_gamma_col$estimate["shape"], 
-                  rate = fit_gamma_col$estimate["rate"])
-sum(y_gamma)
-p_gamma <- ggplot(data.frame(x = x_vals, y = y_gamma), aes(x = x, y = y)) +
-  geom_line(color = "blue") +
-  labs(title = "Fitted Gamma Distribution",
-       x = "Alcohol Consumption (grams per day)",
-       y = "Density") +
-  theme_minimal()
-
-# Fit Weibull distribution
-fit_weibull_col <- fitdist(cd_collapsed, "weibull")
-
-y_weibull <- dweibull(x_vals, shape = fit_weibull_col$estimate["shape"], scale = fit_weibull_col$estimate["scale"])
-
-p_weibull <- ggplot(data.frame(x = x_vals, y = y_weibull), aes(x = x, y = y)) +
-  geom_line(color = "blue") +
-  labs(title = "Fitted Weibull Distribution",
-       x = "Alcohol Consumption (grams per day)",
-       y = "Density") +
-  theme_minimal()
-
-grid.arrange(p_lnorm, p_gamma, p_weibull, nrow = 3)
-
-# Q-Q Plot function
-create_qqcomp_ggplot <- function(fit_list, title) {
-  ggplot_fit <- qqcomp(fit_list, plotstyle = "ggplot")
-  ggplot_fit + 
-    ggtitle(title) +
-    theme(
-      plot.title = element_text(size = 16, face = "bold"),
-      axis.title = element_text(size = 14),
-      axis.text = element_text(size = 12),
-      legend.title = element_text(size = 14),
-      legend.text = element_text(size = 12)
-    ) +
-    labs(color = "Distribution")+
-    coord_cartesian(xlim = c(0, 150))
-}
-
-# Generate Q-Q plots for collapsed data
-qqplot_collapsed <- create_qqcomp_ggplot(list(fit_lognorm_col, fit_gamma_col, fit_weibull_col), "Q-Q Plot Comparison for Collapsed Data")
-
-
-
-# FUNCTION TO CALCULATE PAF USING PROPORTION OF FORMER DRINKERS 
-# THIS FUNCTION APPLIES FOR ANY DISEASE WITH A RR GIVEN BY exp(B1*X)
-# TUBERCULOSIS, PANCREATITIS, COLON AND RECTUM CANCER, LIVER CANCER, 
-# BREAST CANCER
- 
-calculate_paf_fd <- function(beta_1, data, distribution, p_fd, rr_fd) {
-  
-  if (distribution == "lognorm") {
-    fit <- fitdist(data, "lnorm")
-    prevalence_function <- function(x) {
-      dlnorm(x, meanlog = fit$estimate["meanlog"], sdlog = fit$estimate["sdlog"])
-    }
-  } else if (distribution == "gamma") {
-    fit <- fitdist(data, "gamma")
-    prevalence_function <- function(x) {
-      dgamma(x, shape = fit$estimate["shape"], rate = fit$estimate["rate"])
-    }
-  } else if (distribution == "weibull") {
-    fit <- fitdist(data, "weibull")
-    prevalence_function <- function(x) {
-      dweibull(x, shape = fit$estimate["shape"], scale = fit$estimate["scale"])
-    }
-  } else {
-    stop("Unsupported distribution")
-  }
-  
-  rr_function <- function(x) {
-    exp(beta_1 * x)
-  }
-  
-  integrand <- function(x) {
-    prevalence_function(x) * (rr_function(x) - 1)
-  }
-  
-  integral_value <- integrate(integrand, lower = 0, upper = 150)$value
-  
-  numerator <- p_fd*(rr_fd-1)+integral_value
-  denominator <- p_fd*(rr_fd-1)+(integral_value + 1)
-  
-  paf <- numerator / denominator
-
-}
 
 # BETAS OF RELATIVE RISK
 
@@ -166,10 +55,9 @@ rr_locan_fd <- 1.2
 b1_opcan <- 0.02474
 b2_opcan <- -0.00004
 rr_opcan_fd <- 1.2
-# Variance-covariance matrix:
-# Variance (b1): 0.000002953
-# Variance (b2): 0.000000000102
-# Covariance: -0.0000000127
+var_b1_opcan <- 0.000002953
+var_b2_opcan <- 0.000000000102
+cov_opcan <- -0.0000000127
 
 # Oesophagus Cancer
 b1_oescan <- 0.0132063596418668
@@ -462,40 +350,41 @@ set.seed(145)
 n_sim <- 10000
 
 # Pre-allocate a vector for the simulated PAFs
-simulated_pafs <- numeric(n_sim)
-
-for (i in 1:n_sim) {
-  
-  # Simulate PCA mean and SD, ensuring positivity
-  pca_sim <- rnorm(1000, mean = mean_pca, sd = sqrt(var_pca))
-  
-  # Replace any non-positive values with a small positive value
-  pca_sim[pca_sim <= 0] <- 0.001
-  
-  # Calculate the simulated mean and standard deviation
+library(MASS)
+confint_paf <- function(gamma, beta, var_beta, p_abs, p_form){
+set.seed(145)
+  n_sim <- 10000
+  simulated_pafs <- numeric(n_sim)
+  for (i in 1:n_sim) {
+  pca_sim <- rgamma(1000, shape = gamma$estimate["shape"], rate = gamma$estimate["rate"])
+  # Calculate the shape and rate parameters from the simulated PCA values
   mean_sim <- mean(pca_sim)
-  sd_sim <- sqrt(pca_sim)
+  sd_sim <- sd(pca_sim)
   
-  # Calculate shape and rate parameters for the gamma distribution
+  # Calculate shape and rate for the new gamma distribution
   shape_sim <- (mean_sim / sd_sim)^2
   rate_sim <- mean_sim / (sd_sim^2)
   
-  # Simulate the gamma distribution based on these parameters
+  # Simulate the gamma distribution based on `k_sim` and `theta_sim`
   y_gamma_sim <- dgamma(x_vals, shape = shape_sim, rate = rate_sim)
   
   # Skip iteration if y_gamma_sim contains NaN values
   if (any(is.nan(y_gamma_sim))) next
   
   # Simulate beta coefficient
-  beta_sim <- rnorm(1000, mean = b1_bcan, sd = sqrt(var_bcan))
+  beta_sim <- rnorm(1000, beta, sqrt(var_beta))
   
   # Define the relative risk function
   rr_function <- function(x) {
     exp(beta_sim * x)
   }
-  prop_abs_sim <- rnorm(1000, mean = p_abs_fem1, sd = sqrt(p_abs_fem1 * (1 - p_abs_fem1) / 1000))
-  prop_form_sim <- rnorm(1000, mean = p_form_fem1, sd = sqrt(p_form_fem1 * (1 - p_form_fem1) / 1000))
+  # Simulate proportions of lifetime abstainers and former drinkers for the current age category
+  prop_abs_sim <- rnorm(1000, mean = p_abs, sd = sqrt(p_abs * (1 - p_abs) / 1000))
+  prop_form_sim <- rnorm(1000, mean = p_form, sd = sqrt(p_form * (1 - p_form) / 1000))
   
+  # Ensure the simulated proportions are positive
+  prop_abs_sim <- max(prop_abs_sim, 0.001)
+  prop_form_sim <- max(prop_form_sim, 0.001)
   # Calculate the PAF using the trapezoidal method
   simulated_pafs[i] <- trap_int(x = x_vals, y = y_gamma_sim, rr = rr_function(x_vals), 
                                 prop_abs = prop_abs_sim, rr_form = 1, prop_form = prop_form_sim)
@@ -509,81 +398,17 @@ paf_lower <- quantile(simulated_pafs, 0.025)
 paf_upper <- quantile(simulated_pafs, 0.975)
 paf_point_estimate <- mean(simulated_pafs)
 
-list(
+return(list(
   Point_Estimate = round(paf_point_estimate,3),
   Lower_CI = paf_lower,
-  Upper_CI = paf_upper
+  Upper_CI = paf_upper)
 )
-
-# Define the number of simulations
-n_sim <- 10000
-
-# Pre-allocate a matrix for the simulated PAFs (rows: simulations, columns: age categories)
-simulated_pafs <- matrix(NA, nrow = n_sim, ncol = 4)
-
-# Define age categories data
-cd_fem_list <- list(cd_fem1, cd_fem2, cd_fem3, cd_fem4)
-mean_pca_list <- sapply(list(cd_fem1, cd_fem2, cd_fem3, cd_fem4), mean)
-var_pca_list <- sapply(list(cd_fem1, cd_fem2, cd_fem3, cd_fem4), var)
-
-# Define the corresponding abstainer and former drinker proportions for each age category
-p_abs_fem_list <- c(p_abs_fem1, p_abs_fem2, p_abs_fem3, p_abs_fem4)
-p_form_fem_list <- c(p_form_fem1, p_form_fem2, p_form_fem3, p_form_fem4)
-
-# Pre-allocate a matrix for the simulated PAFs (rows: simulations, columns: age categories)
-simulated_pafs <- matrix(NA, nrow = n_sim, ncol = 4)
-
-# Loop over each age category
-for (age_cat in 1:4) {
-  
-  # Extract the relevant data for the current age category
-  cd_fem <- cd_fem_list[[age_cat]]
-  
-  # Simulate PCA mean and SD, ensuring positivity
-  pca_sim <- rnorm(1000, mean = mean_pca_list[age_cat], sd = sqrt(var_pca_list[age_cat]))
-  pca_sim[pca_sim <= 0] <- 0.001
-  
-  # Calculate shape and rate parameters for the gamma distribution
-  shape_sim <- (mean(pca_sim) / sd(pca_sim))^2
-  rate_sim <- mean(pca_sim) / (sd(pca_sim)^2)
-  
-  # Simulate the gamma distribution based on these parameters
-  y_gamma_sim <- dgamma(x_vals, shape = shape_sim, rate = rate_sim)
-  
-  # Skip iteration if y_gamma_sim contains NaN values
-  if (any(is.nan(y_gamma_sim))) next
-  
-  # Simulate proportions of lifetime abstainers and former drinkers for the current age category
-  prop_abs_sim <- rnorm(1, mean = p_abs_fem_list[age_cat], sd = sqrt(p_abs_fem_list[age_cat] * (1 - p_abs_fem_list[age_cat]) / 1000))
-  prop_form_sim <- rnorm(1, mean = p_form_fem_list[age_cat], sd = sqrt(p_form_fem_list[age_cat] * (1 - p_form_fem_list[age_cat]) / 1000))
-  
-  # Perform simulations for the current age category
-  for (i in 1:n_sim) {
-    
-    # Simulate beta coefficient
-    beta_sim <- rnorm(1000, mean = b1_bcan, sd = sqrt(var_bcan))
-    
-    # Define the relative risk function
-    rr_function <- function(x) {
-      exp(beta_sim * x)
-    }
-    
-    # Calculate the PAF using the trapezoidal method
-    simulated_pafs[i, age_cat] <- trap_int(x = x_vals, y = y_gamma_sim, rr = rr_function(x_vals), 
-                                           prop_abs = prop_abs_sim, rr_form = 1, prop_form = prop_form_sim)
-  }
 }
 
-# Calculate the point estimate and 95% confidence intervals for each age category
-paf_results <- data.frame(
-  Age_Category = 1:4,
-  Point_Estimate = apply(simulated_pafs, 2, mean, na.rm = TRUE),
-  Lower_CI = apply(simulated_pafs, 2, quantile, probs = 0.025, na.rm = TRUE),
-  Upper_CI = apply(simulated_pafs, 2, quantile, probs = 0.975, na.rm = TRUE)
-)
-
-# Print the results
-print(paf_results)
+confint_paf(gamma_fem1, b1_bcan, var_bcan,p_abs_fem1, p_form_fem1)
+confint_paf(gamma_fem2, b1_bcan, var_bcan,p_abs_fem2, p_form_fem2)
+confint_paf(gamma_fem3, b1_bcan, var_bcan,p_abs_fem3, p_form_fem3)
+confint_paf(gamma_fem4, b1_bcan, var_bcan,p_abs_fem4, p_form_fem4)
 
 ####################################
 # ESTIMATING AAF FOR TUBERCULOSIS  #
@@ -602,9 +427,74 @@ paf_tb_male4 <- trap_int(x = x_vals, y = y_gamma_male4, rr = rr_tb, prop_abs = p
 paf_tb_male <- paf_pool(paf_tb_male1,paf_tb_male2,paf_tb_male3,paf_tb_male4,"Hombre")
 paf_tb <- paf_overall(paf_tb_fem, paf_tb_male)
 
+confint_paf(gamma_fem1, b_tb, var_tb,p_abs_fem1, p_form_fem1)
+confint_paf(gamma_fem2, b_tb, var_tb,p_abs_fem2, p_form_fem2)
+confint_paf(gamma_fem3, b_tb, var_tb,p_abs_fem3, p_form_fem3)
+confint_paf(gamma_fem4, b_tb, var_tb,p_abs_fem4, p_form_fem4)
+
+confint_paf(gamma_male1, b_tb, var_tb,p_abs_male1, p_form_male1)
+confint_paf(gamma_male2, b_tb, var_tb,p_abs_male2, p_form_male2)
+confint_paf(gamma_male3, b_tb, var_tb,p_abs_male3, p_form_male3)
+confint_paf(gamma_male4, b_tb, var_tb,p_abs_male4, p_form_male4)
+
 ################################################
 # ESTIMATING AAF FOR OTHER PHARINGEAL CANCER   #
 ################################################
+
+confint_paf_vcov <- function(gamma, b1, b2, var_b1, var_b2, cov_b1_b2, p_abs, p_form, rr_fd) {
+  set.seed(145)
+  n_sim <- 10000
+  simulated_pafs <- numeric(n_sim)
+  
+  # Construct the variance-covariance matrix
+  var_cov_matrix <- matrix(c(var_b1, cov_b1_b2, cov_b1_b2, var_b2), nrow = 2)
+  
+  for (i in 1:n_sim) {
+    # Simulate PCA mean and SD using the gamma distribution
+    pca_sim <- rgamma(1000, shape = gamma$estimate["shape"], rate = gamma$estimate["rate"])
+    
+    # Calculate the shape and rate parameters from the simulated PCA values
+    mean_sim <- mean(pca_sim)
+    sd_sim <- sd(pca_sim)
+    
+    # Calculate shape and rate for the new gamma distribution
+    shape_sim <- (mean_sim / sd_sim)^2
+    rate_sim <- mean_sim / (sd_sim^2)
+    
+    # Simulate the gamma distribution
+    y_gamma_sim <- dgamma(x_vals, shape = shape_sim, rate = rate_sim)
+    
+    # Skip iteration if y_gamma_sim contains NaN values
+    if (any(is.nan(y_gamma_sim))) next
+    
+    # Simulate the beta coefficients jointly from a multivariate normal distribution
+    beta_sim <- MASS::mvrnorm(1, mu = c(b1, b2), Sigma = var_cov_matrix)
+    
+    # Define the relative risk function
+    rr_function <- function(x) {
+      exp(beta_sim[1] * x + beta_sim[2] * x^2)
+    }
+    
+    # Simulate proportions of lifetime abstainers and former drinkers
+    prop_abs_sim <- max(rnorm(1, mean = p_abs, sd = sqrt(p_abs * (1 - p_abs) / 1000)), 0.001)
+    prop_form_sim <- max(rnorm(1, mean = p_form, sd = sqrt(p_form * (1 - p_form) / 1000)), 0.001)
+    
+    # Calculate the PAF using the trapezoidal method
+    simulated_pafs[i] <- trap_int(x = x_vals, y = y_gamma_sim, rr = rr_function(x_vals), 
+                                  prop_abs = prop_abs_sim, rr_form = rr_fd, prop_form = prop_form_sim)
+  }
+  
+  # Remove NaN values from simulated PAFs
+  simulated_pafs <- simulated_pafs[!is.nan(simulated_pafs)]
+  
+  # Calculate the 95% confidence interval
+  paf_lower <- quantile(simulated_pafs, 0.025)
+  paf_upper <- quantile(simulated_pafs, 0.975)
+  paf_point_estimate <- mean(simulated_pafs)
+  
+  return(list(point_estimate = paf_point_estimate, lower_ci = paf_lower, upper_ci = paf_upper))
+}
+
 rr_opcan_cal <- function(b1,b2,x){
   exp(b1*x+b2*x**2)
 }
@@ -622,6 +512,16 @@ paf_opcan_male3 <- trap_int(x = x_vals, y = y_gamma_male3, rr = rr_opcan, prop_a
 paf_opcan_male4 <- trap_int(x = x_vals, y = y_gamma_male4, rr = rr_opcan, prop_abs = p_abs_male4,rr_form = rr_opcan_fd, prop_form = p_form_male4)
 paf_opcan_male <- paf_pool(paf_opcan_male1,paf_opcan_male2,paf_opcan_male3,paf_opcan_male4, "Hombre")
 paf_opcan <- paf_overall(paf_opcan_fem, paf_opcan_male)
+
+confint_paf_vcov(gamma_fem1, b1_opcan, b2_opcan, var_b1_opcan, var_b2_opcan, cov_opcan, p_abs_fem1, p_form_fem1, rr_opcan_fd)
+confint_paf_vcov(gamma_fem2, b1_opcan, b2_opcan, var_b1_opcan, var_b2_opcan, cov_opcan, p_abs_fem2, p_form_fem2, rr_opcan_fd)
+confint_paf_vcov(gamma_fem3, b1_opcan, b2_opcan, var_b1_opcan, var_b2_opcan, cov_opcan, p_abs_fem3, p_form_fem3, rr_opcan_fd)
+confint_paf_vcov(gamma_fem4, b1_opcan, b2_opcan, var_b1_opcan, var_b2_opcan, cov_opcan, p_abs_fem4, p_form_fem4, rr_opcan_fd)
+
+confint_paf_vcov(gamma_male1, b1_opcan, b2_opcan, var_b1_opcan, var_b2_opcan, cov_opcan, p_abs_male1, p_form_male1, rr_opcan_fd)
+confint_paf_vcov(gamma_male2, b1_opcan, b2_opcan, var_b1_opcan, var_b2_opcan, cov_opcan, p_abs_male2, p_form_male2, rr_opcan_fd)
+confint_paf_vcov(gamma_male3, b1_opcan, b2_opcan, var_b1_opcan, var_b2_opcan, cov_opcan, p_abs_male3, p_form_male3, rr_opcan_fd)
+confint_paf_vcov(gamma_male4, b1_opcan, b2_opcan, var_b1_opcan, var_b2_opcan, cov_opcan, p_abs_male4, p_form_male4, rr_opcan_fd)
 
 ##########################################
 # ESTIMATING AAF FOR OESOPHAFUS CANCER   #
