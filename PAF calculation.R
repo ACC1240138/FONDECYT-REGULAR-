@@ -7,7 +7,8 @@ rm(list = ls())
 gc()
 # List of required packages
 required_packages <- c("dplyr", "readr", "haven", 
-                       "ggplot2", "gridExtra", "fitdistrplus", "MASS")
+                       "ggplot2", "gridExtra", "fitdistrplus", "MASS",
+                       "survey")
 
 # Install and load required packages
 sapply(required_packages, function(pkg) {
@@ -19,7 +20,6 @@ data <- readRDS("enpg_full.RDS") %>%
   mutate(aux = ifelse(oh1 == "No" & !is.na(oh2) ,1,0)) %>% 
   filter(aux == 0) %>% 
   dplyr::select(-aux)
-
 
 
 # BETAS OF RELATIVE RISK
@@ -197,17 +197,14 @@ data_input <- data %>%
   dplyr::select(sexo, exp, edad_tramo, volajohdia, cvolaj)
 
 # WE NEED THE PROPORTION OF MALES AND FEMALES IN POPULATION FOR POOLED PAF
+
 input <- data_input %>% 
   filter(!is.na(cvolaj)) %>% 
   group_by(sexo, edad_tramo, cvolaj) %>% 
   summarise(weighted_count = sum(exp, na.rm = TRUE)) %>% 
   mutate(prop = round(weighted_count / sum(weighted_count), 2))
 
-props <- data_input %>% 
-  filter(!is.na(cvolaj)) %>% 
-  group_by(sexo, edad_tramo) %>% 
-  summarise(weighted_count = sum(exp, na.rm = TRUE)) %>% 
-  mutate(prop = round(weighted_count / sum(weighted_count), 2))
+
 
 
 
