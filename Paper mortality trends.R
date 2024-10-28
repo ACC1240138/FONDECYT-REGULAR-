@@ -1,7 +1,7 @@
 #---------------------------#
 # MORTALITY TRENDS IN CHILE #
 #---------------------------#
-
+test
 required_packages <- c("dplyr", "readr", "haven", 
                        "ggplot2", "gridExtra", 
                        "fitdistrplus", "MASS")
