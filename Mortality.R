@@ -324,9 +324,7 @@ mort_bcan <- def %>%
   mutate(paf_mort_low = n*lower,
     paf_mort = n*point,
          paf_mort_up = n*upper) %>% 
-  dplyr::select(-point, -lower, -upper, -ca_mama)
-
-mort_bcan %>% 
+  ungroup() %>% 
   group_by(Year) %>% 
   summarise(mort_point = sum(paf_mort),
             mort_low = sum(paf_mort_low),
