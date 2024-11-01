@@ -639,7 +639,8 @@ p_form_list_male <- list(
 ####################################
 # ESTIMATING AAF FOR BREAST CANCER #
 ####################################
-
+b1_bcan <- 0.01018
+var_bcan <- 0.0000007208
 bcan_female <- data.frame(
   Year = c(2008, 2010, 2012, 2014, 2016, 2018),
   Fem1_point = NA, Fem1_lower = NA, Fem1_upper = NA,
@@ -656,7 +657,7 @@ for (i in 1:length(bcan_female$Year)) {
                   var_beta = var_bcan, 
                   p_abs = p_abs_list[[j]][[i]], 
                   p_form = p_form_list[[j]][[i]], 
-                  rr_form = rr_bcan_fd, 
+                  rr_form = 1, 
                   rr_function = rr_linear)
     }, error = function(e) NULL)
     

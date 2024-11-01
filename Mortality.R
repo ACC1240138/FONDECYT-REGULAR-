@@ -2,7 +2,7 @@
 # MORTALITY PREPARATION #
 #########################
 required_packages <- c("dplyr", "readr", "stringr", 
-                       "ggplot2")
+                       "ggplot2", "lubridate", "tidyverse")
 
 # Install and load required packages
 sapply(required_packages, function(pkg) {
@@ -293,4 +293,44 @@ rm(accidental_poisoning_codes, drowning_codes, falls_codes,
 
 # ES DIAG1 O DIAG2?
 
+def <- def %>% 
+  mutate(date = as.Date(FECHA_DEF),
+         Year = year(date),
+         edad_tramo = case_when(between(EDAD_CANT, 15, 29)~1,
+                                between(EDAD_CANT, 30,44)~2,
+                                between(EDAD_CANT,45,59)~3,
+                                between(EDAD_CANT,60,65)~4)) %>%  
+  filter(between(EDAD_CANT, 18, 65),
+         Year == 2018 | Year == 2016 | Year == 2014 | Year == 2012 |
+           Year == 2010 | Year == 2008) 
+  
+
+# CANCER MORTALITY #
+# BREAST CANCER
+bcan_fem_long <- bcan_female %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
+
+
+mort_bcan <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", ca_mama == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(ca_mama) %>% 
+  left_join(bcan_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+    paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  dplyr::select(-point, -lower, -upper, -ca_mama)
+
+mort_bcan %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+  
 
