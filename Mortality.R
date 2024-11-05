@@ -174,6 +174,7 @@ transport_accidents_codes <- c(
   "V860", "V861", "V862", "V863", 
   "V870", "V871", "V872", "V873", "V874", "V875", "V876", "V877", "V878", "V892"
 )
+self_poisoning_codes <- paste0("X65", 0:9)
 other_injuries_codes <- c(
   paste0("W20", 0:9), paste0("W21", 0:9), paste0("W22", 0:9), paste0("W23", 0:9), paste0("W24", 0:9), paste0("W25", 0:9),
   paste0("W26", 0:9), paste0("W27", 0:9), paste0("W28", 0:9), paste0("W29", 0:9), paste0("W30", 0:9),
@@ -207,6 +208,19 @@ other_injuries_codes <- c(
   paste0("Y75", 0:9), paste0("Y76", 0:9), paste0("Y77", 0:9), paste0("Y78", 0:9), paste0("Y79", 0:9),
   paste0("Y80", 0:9), paste0("Y81", 0:9), paste0("Y82", 0:9), paste0("Y83", 0:9), paste0("Y84", 0:9),
   paste0("Y85", 0:9), paste0("Y86", 0:9), paste0("Y88",0:9), paste0("Y89", 0:9))
+
+homicide_codes <- c(
+  paste0("X85", 0:9), paste0("X86", 0:9), paste0("X87", 0:9), paste0("X88", 0:9), paste0("X89", 0:9),
+  paste0("X90", 0:9), paste0("X91", 0:9), paste0("X92", 0:9), paste0("X93", 0:9), paste0("X94", 0:9),
+  paste0("X95", 0:9), paste0("X96", 0:9), paste0("X97", 0:9), paste0("X98", 0:9), paste0("X99", 0:9),
+  paste0("Y00", 0:9), paste0("Y01", 0:9), paste0("Y02", 0:9), paste0("Y03", 0:9), paste0("Y04", 0:9),
+  paste0("Y05", 0:9), paste0("Y06", 0:9), paste0("Y07", 0:9), paste0("Y08", 0:9), paste0("Y09", 0:9),
+  "Y87.1"
+)
+
+hiv_aids_codes <- c(
+  paste0("B20", 0:9), paste0("B21", 0:9), paste0("B22", 0:9), paste0("B23", 0:9), paste0("B24", 0:9)
+)
 
 def <- def %>% 
   mutate(epilep = if_else(DIAG1 %in% c("G400", "G401", "G402", "G403", "G404", "G405", "G406", "G407", "G408", "G409", 
@@ -273,25 +287,16 @@ def <- def %>%
          transport_accidents = if_else(DIAG2 %in% transport_accidents_codes, 1, 0),
          other_injuries = if_else(
            DIAG2 %in% other_injuries_codes | 
-             (str_detect(DIAG2, "^V") & !DIAG2 %in% transport_accidents_codes), 
-           1, 0))
+             (str_detect(DIAG2, "^V") & !DIAG2 %in% transport_accidents_codes),
+           1, 0),
+         homicide = if_else(DIAG2 %in% homicide_codes, 1, 0),
+         hiv = if_else(DIAG1 %in% hiv_aids_codes, 1, 0),
+         self_pois = if_else(DIAG1 %in% self_poisoning_codes,1,0))
 
-
+table(def$self_pois)
 
 rm(accidental_poisoning_codes, drowning_codes, falls_codes,
    fire_and_burn_codes, other_injuries_codes, transport_accidents_codes)
-
-# ELIMINAR COLUMNAS DE DEF
-
-# EXTRAER EL RR DE LA LITERATURA PARA CADA CATEGORIA DE CONSUMO
-# OBTENER LA PREVALENCIA POR SUBGRUPO (SEXO)
-# REVISAR ARTICULOS DE LA OMS
-
-
-# PREGUNTAR: - Motor vehicle accidents, Accidental poisoning, Falls,Fires,Drowning,
-# Other Unintentional injuries, Self-inflicted injuries, Homicide, Other intentional injuries
-
-# ES DIAG1 O DIAG2?
 
 def <- def %>% 
   mutate(date = as.Date(FECHA_DEF),
@@ -315,7 +320,6 @@ bcan_fem_long <- bcan_female %>%
   ) %>%
   mutate(edad_tramo = as.integer(edad_tramo))
 
-
 mort_bcan <- def %>% 
   filter(SEXO_NOMBRE == "Mujer", ca_mama == 1) %>% 
   group_by(edad_tramo, Year) %>% 
@@ -330,5 +334,1114 @@ mort_bcan <- def %>%
             mort_low = sum(paf_mort_low),
             mort_up = sum(paf_mort_up))
 
-  
+# OTHER PHARINGEAL CANCER
+opcan_fem_long <- opcan_female %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
 
+opcan_male_long <- opcan_male %>%
+  pivot_longer(
+    cols = starts_with("Male"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Male(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))  
+
+mort_opcan_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", ca_boca == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(ca_boca) %>% 
+  left_join(opcan_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_opcan_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", ca_boca == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(ca_boca) %>% 
+  left_join(opcan_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+# LARYNX CANCER
+lxcan_fem_long <- lxcan_female %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
+
+lxcan_male_long <- lxcan_male %>%
+  pivot_longer(
+    cols = starts_with("Male"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Male(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))  
+
+mort_lxcan_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", ca_larin == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(ca_larin) %>% 
+  left_join(lxcan_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_lxcan_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", ca_larin == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(ca_larin) %>% 
+  left_join(lxcan_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+# OESOPHAGUS CANCER
+
+oescan_fem_long <- oescan_female %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
+
+oescan_male_long <- oescan_male %>%
+  pivot_longer(
+    cols = starts_with("Male"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Male(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))  
+
+mort_oescan_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", ca_esofa == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(ca_esofa) %>% 
+  left_join(oescan_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_oescan_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", ca_esofa == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(ca_esofa) %>% 
+  left_join(oescan_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+# COLON AND RECTUM
+crcan_fem_long <- crcan_female %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
+
+crcan_male_long <- crcan_male %>%
+  pivot_longer(
+    cols = starts_with("Male"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Male(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))  
+
+mort_crcan_fem <- def %>% 
+  mutate(crcan = ifelse(ca_recto == 1 | ca_colorec == 1 | ca_colon == 1,1,0)) %>% 
+  filter(SEXO_NOMBRE == "Mujer", crcan == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(crcan) %>% 
+  left_join(crcan_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_crcan_male <- def %>% 
+  mutate(crcan = ifelse(ca_recto == 1 | ca_colorec == 1 | ca_colon == 1,1,0)) %>% 
+  filter(SEXO_NOMBRE == "Hombre", crcan == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(crcan) %>% 
+  left_join(crcan_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+# LIVER CANCER
+lican_fem_long <- lican_female %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
+
+lican_male_long <- lican_male %>%
+  pivot_longer(
+    cols = starts_with("Male"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Male(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))  
+
+mort_lican_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", ca_higa == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(ca_higa) %>% 
+  left_join(lican_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_lican_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", ca_higa == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(ca_higa) %>% 
+  left_join(lican_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+
+######################
+# NEURO-PSYCHIATRIC #
+#####################
+# EPILEPSY (BOTH SEXES)
+epi_fem_long <- epi_female %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
+
+epi_male_long <- epi_male %>%
+  pivot_longer(
+    cols = starts_with("Male"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Male(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))  
+
+mort_epi_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", epilep == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(epilep) %>% 
+  left_join(epi_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_epi_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", epilep == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(epilep) %>% 
+  left_join(epi_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+# MENTAL AND BEHAVIORAL DISORDERS (AAF = 1)
+mort_menb <- def %>% 
+  filter(des_men == 1) %>% 
+  group_by(SEXO_NOMBRE, Year) %>% 
+  count(des_men) %>% 
+  dplyr::select(-des_men, Sex = SEXO_NOMBRE, mort_point = n) %>% 
+  mutate(Sex = ifelse(Sex == "Hombre", "Male","Female"))
+
+# DEGENERATION OF NERVOUS SYSTEM
+mort_degnerv <- def %>% 
+  filter(deg_nerv == 1) %>% 
+  group_by(SEXO_NOMBRE, Year) %>% 
+  count(deg_nerv) %>% 
+  dplyr::select(-deg_nerv, Sex = SEXO_NOMBRE, mort_point = n) %>% 
+  mutate(Sex = ifelse(Sex == "Hombre", "Male","Female"))
+
+# ALCOHOLIC POLYNEUROPATHY
+mort_polineu <- def %>% 
+  filter(polineu == 1) %>% 
+  group_by(SEXO_NOMBRE, Year) %>% 
+  count(polineu) %>% 
+  dplyr::select(-polineu, Sex = SEXO_NOMBRE, mort_point = n) %>% 
+  mutate(Sex = ifelse(Sex == "Hombre", "Male","Female"))
+table(def$polineu)
+
+############
+# INJURIES #
+############
+
+# ROAD INJURIES
+ri_fem_long <- ri_fem %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
+
+mort_ri_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", transport_accidents == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(transport_accidents) %>% 
+  left_join(ri_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+ri_male_long <- epi_male %>%
+  pivot_longer(
+    cols = starts_with("Male"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Male(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))  
+
+mort_ri_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", transport_accidents == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(transport_accidents) %>% 
+  left_join(epi_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+#POISONINGS, FALLS, FIRE, HEAT AND HOT SUBSTANCES, DROWING,
+# EXPOSURE TO MECHANICAL FORCES, OTHER UNINTENTIONAL INJURIES
+injuries_fem_long <- injuries_fem %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
+
+injuries_male_long <- injuries_male %>%
+  pivot_longer(
+    cols = starts_with("Male"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Male(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo)) 
+
+# ACCIDENTAL POISONING
+mort_pois_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", accidental_poisoning == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(transport_accidents) %>% 
+  left_join(injuries_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_pois_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", accidental_poisoning == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(transport_accidents) %>% 
+  left_join(injuries_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+# FALLS
+
+mort_falls_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", falls == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(falls) %>% 
+  left_join(injuries_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_falls_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", falls == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(falls) %>% 
+  left_join(injuries_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+# FIRES
+mort_fire_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", fires == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(fires) %>% 
+  left_join(injuries_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_fire_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", fires == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(fires) %>% 
+  left_join(injuries_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+# DROWNINGS
+drowning
+
+mort_drown_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", drowning == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(drowning) %>% 
+  left_join(injuries_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_drown_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", drowning == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(drowning) %>% 
+  left_join(injuries_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+
+# OTHER UNINTENTIONAL INJURIES
+mort_uinj_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", other_injuries == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(other_injuries) %>% 
+  left_join(injuries_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_uinj_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", other_injuries == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(other_injuries) %>% 
+  left_join(injuries_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+# HOMICIDE
+
+violence_fem_long <- violence_fem %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
+
+violence_male_long <- violence_male %>%
+  pivot_longer(
+    cols = starts_with("Male"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Male(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo)) 
+
+mort_hom_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", homicide == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(homicide) %>% 
+  left_join(violence_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_hom_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", homicide == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(homicide) %>% 
+  left_join(violence_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+
+##################
+# CARDIOVASCULAR #
+##################
+# ALCOHOLIC CARDIOMIOPATHY
+
+mort_cardiomio <- def %>% 
+  filter(cardiomio == 1) %>% 
+  group_by(SEXO_NOMBRE, Year) %>% 
+  count(cardiomio) %>% 
+  dplyr::select(-cardiomio, Sex = SEXO_NOMBRE, mort_point = n) %>% 
+  mutate(Sex = ifelse(Sex == "Hombre", "Male","Female"))
+
+# HIPERTENSIVE HEART DISEASE
+hhd_fem_long <- hhd_female %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
+
+hhd_male_long <- hhd_male %>%
+  pivot_longer(
+    cols = starts_with("Male"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Male(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))  
+
+mort_hhd_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", hiperten == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(hiperten) %>% 
+  left_join(hhd_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_hhd_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", hiperten == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(hiperten) %>% 
+  left_join(hhd_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+# ISCHAEMIC HEART DISEASE
+
+ihd_long <- data.frame(
+  Year = rep(seq(2008, 2018, by = 2),4),
+  lower = 0.147,
+  point = 0.181,
+  upper = 0.212
+) %>% arrange(Year)
+
+mort_ihd_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", ihd == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(ihd) %>% 
+  left_join(ihd_long, by = c("Year")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_ihd_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", ihd == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(ihd) %>% 
+  left_join(ihd_long, by = c("Year")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+# INTRACEREBRAL HEMORRAGE
+  ich_fem_long <- ich_female %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
+
+ich_male_long <- ich_male %>%
+  pivot_longer(
+    cols = starts_with("Male"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Male(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))  
+  
+mort_ich_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", ave_hem == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(ave_hem) %>% 
+  left_join(ich_male_long, by = c("Year")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_ich_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", ave_hem == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(ave_hem) %>% 
+  left_join(ich_fem_long, by = c("Year")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+  
+# ISCHAEMIC STROKE
+stroke_long <- data.frame(
+  Year = rep(seq(2008, 2018, by = 2),4),
+  lower = 0.048,
+  point = 0.07,
+  upper = 0.094
+) %>% arrange(Year)
+
+mort_stroke_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", ave_isq == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(ave_isq) %>% 
+  left_join(stroke_long, by = c("Year")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_stroke_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", ave_isq == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(ave_isq) %>% 
+  left_join(stroke_long, by = c("Year")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+  
+# OTHER CAUSES
+
+# DIABETES
+dm_fem_long <- dm_fem %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
+
+dm_male_long <- dm_male %>%
+  pivot_longer(
+    cols = starts_with("Male"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Male(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))  
+
+mort_dm_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", diabetes == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(diabetes) %>% 
+  left_join(dm_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_dm_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", diabetes == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(diabetes) %>% 
+  left_join(dm_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))  
+  
+# TUBERCULOSIS 
+tb_fem_long <- tb_female %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
+
+tb_male_long <- tb_male %>%
+  pivot_longer(
+    cols = starts_with("Male"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Male(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))  
+
+mort_tb_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", TBC == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(TBC) %>% 
+  left_join(tb_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_tb_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", TBC == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(TBC) %>% 
+  left_join(tb_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))  
+  
+# HIV/AIDS
+
+hiv_fem_long <- hiv_female %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
+
+hiv_male_long <- hiv_male %>%
+  pivot_longer(
+    cols = starts_with("Male"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Male(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))  
+
+mort_hiv_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", hiv == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(hiv) %>% 
+  left_join(hiv_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_hiv_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", hiv == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(hiv) %>% 
+  left_join(hiv_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))  
+
+# LOWER RESPIRATORY INFECTIONS 
+
+lri_fem_long <- lri_female %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
+
+lri_male_long <- lri_male %>%
+  pivot_longer(
+    cols = starts_with("Male"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Male(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))  
+
+mort_lri_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", neumonia == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(neumonia) %>% 
+  left_join(lri_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_lri_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", neumonia == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(neumonia) %>% 
+  left_join(lri_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))    
+
+# LIVER CIRROSIS
+
+lc_fem_long <- lc_fem %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
+
+lc_male_long <- lc_male %>%
+  pivot_longer(
+    cols = starts_with("Male"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Male(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))  
+
+mort_lc_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", cirrosis == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(cirrosis) %>% 
+  left_join(lc_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_lc_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", cirrosis == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(cirrosis) %>% 
+  left_join(lc_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))      
+  
+# PANCREATITIS   
+  
+panc_fem_long <- panc_fem %>%
+  pivot_longer(
+    cols = starts_with("Fem"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Fem(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))
+
+panc_male_long <- panc_male %>%
+  pivot_longer(
+    cols = starts_with("Male"),
+    names_to = c("edad_tramo", ".value"),
+    names_pattern = "Male(\\d)_(.*)"
+  ) %>%
+  mutate(edad_tramo = as.integer(edad_tramo))  
+
+mort_panc_male <- def %>% 
+  filter(SEXO_NOMBRE == "Hombre", pancreati == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(pancreati) %>% 
+  left_join(panc_male_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))
+
+mort_panc_fem <- def %>% 
+  filter(SEXO_NOMBRE == "Mujer", pancreati == 1) %>% 
+  group_by(edad_tramo, Year) %>% 
+  count(pancreati) %>% 
+  left_join(panc_fem_long, by = c("Year", "edad_tramo")) %>% 
+  mutate(paf_mort_low = n*lower,
+         paf_mort = n*point,
+         paf_mort_up = n*upper) %>% 
+  ungroup() %>% 
+  group_by(Year) %>% 
+  summarise(mort_point = sum(paf_mort),
+            mort_low = sum(paf_mort_low),
+            mort_up = sum(paf_mort_up))   
+
+# ALCOHOLIC PANCREATITIS
+mort_pancoh <- def %>% 
+  filter(pancreati_oh == 1) %>% 
+  group_by(SEXO_NOMBRE, Year) %>% 
+  count(pancreati_oh) %>% 
+  dplyr::select(-pancreati_oh, Sex = SEXO_NOMBRE, mort_point = n) %>% 
+  mutate(Sex = ifelse(Sex == "Hombre", "Male","Female"))
+
+# ALCOHOLIC GASTRITIS
+mort_gastrit <- def %>% 
+  filter(gastrit == 1) %>% 
+  group_by(SEXO_NOMBRE, Year) %>% 
+  count(gastrit) %>% 
+  dplyr::select(-gastrit, Sex = SEXO_NOMBRE, mort_point = n) %>% 
+  mutate(Sex = ifelse(Sex == "Hombre", "Male","Female"))
+
+mort_ihd_male
+  
+combined_mortality <- bind_rows(
+  mort_bcan %>% mutate(type = "Cancer", sub_type = "Breast Cancer", Sex = "Female"),
+  mort_opcan_fem %>% mutate(type = "Cancer",sub_type = "Pharyngeal Cancer", Sex = "Female"),
+  mort_opcan_male %>% mutate(type = "Cancer",sub_type = "Pharyngeal Cancer", Sex = "Male"),
+  mort_lxcan_fem %>% mutate(type = "Cancer",sub_type = "Larynx Cancer", Sex = "Female"),
+  mort_lxcan_male %>% mutate(type = "Cancer",sub_type = "Larynx Cancer", Sex = "Male"),
+  mort_oescan_fem %>% mutate(type = "Cancer",sub_type = "Esophageal Cancer", Sex = "Female"),
+  mort_oescan_male %>% mutate(type = "Cancer",sub_type = "Esophageal Cancer", Sex = "Male"),
+  mort_crcan_fem %>% mutate(type = "Cancer",sub_type = "Colon and Rectum Cancer", Sex = "Female"),
+  mort_crcan_male %>% mutate(type = "Cancer",sub_type = "Colon and Rectum Cancer", Sex = "Male"),
+  mort_lican_fem %>%  mutate(type = "Cancer",sub_type = "Liver Cancer", Sex = "Female"),
+  mort_lican_male %>% mutate(type = "Cancer",sub_type = "Liver Cancer", Sex = "Male"),
+  mort_epi_fem %>%  mutate(type = "Neuropsychiatric",sub_type = "Epilepsy", Sex = "Female"),
+  mort_epi_male %>% mutate(type = "Neuropsychiatric",sub_type = "Epilepsy", Sex = "Male"),
+  mort_menb %>% mutate(type = "Neuropsychiatric",sub_type = "Mental and Behavioral Disorders"),
+  mort_degnerv %>% mutate(type = "Neuropsychiatric",sub_type = "Degeneration of Nervous System"),
+  mort_cardiomio %>% mutate(type = "Cardiovascular",sub_type = "Alcoholic Cardiomyopathy"),
+  mort_hhd_fem %>% mutate(type = "Cardiovascular",sub_type = "Hipertensive Heart Disease", Sex = "Female"),
+  mort_hhd_male %>% mutate(type = "Cardiovascular",sub_type = "Hipertensive Heart Disease", Sex = "Male"),
+  mort_ihd_male %>% mutate(type = "Cardiovascular",sub_type = "Ischemic Heart Disease", Sex = "Male"),
+  mort_ihd_fem %>% mutate(type = "Cardiovascular",sub_type = "Ischemic Heart Disease", Sex = "Female"),
+  mort_ich_male %>% mutate(type = "Cardiovascular",sub_type = "Intracerebral Hemorrage", Sex = "Male"),
+  mort_ich_fem %>% mutate(type = "Cardiovascular",sub_type = "Intracerebral Hemorrage", Sex = "Female"),
+  mort_stroke_fem %>% mutate(type = "Cardiovascular",sub_type = "Ischemic Stroke", Sex = "Female"),
+  mort_stroke_male %>% mutate(type = "Cardiovascular",sub_type = "Ischemic Stroke", Sex = "Male"),
+  mort_dm_male %>% mutate(type = "Other causes",sub_type = "Diabetes Mellitus", Sex = "Male"),
+  mort_dm_fem %>% mutate(type = "Other causes",sub_type = "Diabetes Mellitus", Sex = "Female"),
+  mort_tb_male %>% mutate(type = "Other causes",sub_type = "Tuberculosis", Sex = "Male"),
+  mort_tb_fem %>% mutate(type = "Other causes",sub_type = "Tuberculosis", Sex = "Female"),
+  mort_hiv_male %>% mutate(type = "Other causes",sub_type = "HIV/AIDS", Sex = "Male"),
+  mort_hiv_fem %>% mutate(type = "Other causes",sub_type = "HIV/AIDS", Sex = "Female"),
+  mort_lri_male %>% mutate(type = "Other causes",sub_type = "Lower Respiratory Infection", Sex = "Male"),
+  mort_lri_fem %>% mutate(type = "Other causes",sub_type = "Lower Respiratory Infection", Sex = "Female"),
+  mort_lc_male %>% mutate(type = "Other causes",sub_type = "Liver Cirrhosis", Sex = "Male"),
+  mort_lc_fem %>% mutate(type = "Other causes",sub_type = "Liver Cirrhosis", Sex = "Female"),
+  mort_panc_male %>% mutate(type = "Other causes",sub_type = "Pancreatitis", Sex = "Male"),
+  mort_panc_fem %>% mutate(type = "Other causes",sub_type = "Pancreatitis", Sex = "Female"),
+  mort_pancoh %>%  mutate(type = "Other causes",sub_type = "Alcoholic Pancreatitis"),
+  mort_gastrit %>% mutate(type = "Other causes",sub_type = "Alcoholic Gastritis"),
+  mort_ri_male %>% mutate(type = "Injuries",sub_type = "Road Injuries", Sex = "Male"),
+  mort_ri_fem %>% mutate(type = "Injuries",sub_type = "Road Injuries", Sex = "Female"),
+  mort_pois_male %>% mutate(type = "Injuries",sub_type = "Accidental Poisoning", Sex = "Male"),
+  mort_pois_fem %>% mutate(type = "Injuries",sub_type = "Accidental Poisoning", Sex = "Female"),
+  mort_falls_male %>% mutate(type = "Injuries",sub_type = "Falls", Sex = "Male"),
+  mort_falls_fem %>% mutate(type = "Injuries",sub_type = "Falls", Sex = "Female"),
+  mort_fire_male %>% mutate(type = "Injuries",sub_type = "Fires", Sex = "Male"),
+  mort_fire_fem %>% mutate(type = "Injuries",sub_type = "Fires", Sex = "Female"),
+  mort_drown_male %>% mutate(type = "Injuries",sub_type = "Drowning", Sex = "Male"),
+  mort_drown_fem %>% mutate(type = "Injuries",sub_type = "Drowning", Sex = "Female"),
+  mort_uinj_male %>% mutate(type = "Injuries",sub_type = "Other Unintentional Injuries", Sex = "Male"),
+  mort_uinj_fem %>% mutate(type = "Injuries",sub_type = "Other Unintentional Injuries", Sex = "Female"),
+  mort_hom_male %>% mutate(type = "Injuries",sub_type = "Homicide", Sex = "Male"),
+  mort_hom_fem %>% mutate(type = "Injuries",sub_type = "Homicide", Sex = "Female"),
+)
+
+
+combined_mortality %>% 
+  filter(Sex == "Female") %>% 
+  group_by(Year, type) %>% 
+  summarise(mort = sum(mort_point), .groups = 'drop') %>% 
+  ggplot(aes(x = Year, y = mort, linetype = type, group = type)) +
+  geom_line(aes(color = type)) +
+  geom_point(aes(color = type)) +
+  scale_color_manual(values = rep(c("black", "grey"), length.out = length(unique(combined_mortality$type)))) +  # Repeat colors
+  scale_linetype_manual(values = c("solid", "dashed", "dotted", "dotdash", "twodash")) +  # Different line types
+  scale_x_continuous(breaks = seq(2008,2018,2)) +  # Set integer breaks for the x-axis
+  labs(
+    y = "Mortality Estimate",
+    x = "Year",
+    color = "Type",
+    linetype = "Type"
+  ) +
+  theme_minimal()
+
+combined_mortality %>% 
+  filter(Sex == "Female", sub_type == "Epilepsy") 
+  

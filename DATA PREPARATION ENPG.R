@@ -318,7 +318,7 @@ mutate(id = factor(id),
 enpg18 <- read_rds("https://github.com/ACC1240138/FONDECYT-REGULAR-/raw/main/rawdata/enpg2018.RDS")
 data18 <- enpg18 %>% 
   mutate(year = 2018) %>% 
-  select(id = SbjNum, year, region = Region, comuna, exp = Fexp, sexo = S01, edad = S02,
+  dplyr::select(id = SbjNum, year, region = Region, comuna, exp = Fexp, sexo = S01, edad = S02,
          nedu1 = T_DP_12_1, nedu2 = T_DP_13_1, religion = DP_5, ecivil = DP_2, 
          p_originario = DP_4, ingreso = DP_16, tab1 = ST_2, tab2 = ST_5, tab3 = ST_6,
          tab4 = ST_7, mar1 = MAR_1, mar2 = MAR_4, coc1 = COC_1, coc2 = COC_4, tranq_vida = TRANS_1_O1,
